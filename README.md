@@ -1,15 +1,30 @@
 # Cadence
 
-Cadence is an open-source pronunciation training app built with Next.js, Supabase, and two Python AI services. It combines strict phoneme-level feedback with freer conversation practice, so learners can move from isolated words to guided speaking and open-topic coaching in the same product.
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-149eca)](https://react.dev/)
+[![Open Source](https://img.shields.io/badge/open%20source-yes-1f8f5f)](https://github.com/pstepanovum/Cadence)
 
-## What Cadence Does
+Cadence is an open-source AI pronunciation coach built with Next.js, Supabase, and Python model services. It combines phoneme-level pronunciation feedback, guided speaking modules, structured conversation practice, and an open-topic AI coach so learners can improve spoken English in one product.
+
+Cadence is designed for people who want more than flashcards: it gives live speech feedback, targeted repetition, theory modules, conversation drills, and a flexible AI coach that keeps the practice loop moving.
+
+## Why Cadence
+
+- phoneme-aware pronunciation feedback instead of vague speaking scores
+- guided learning modules and open conversation in the same app
+- transcript-based and target-based speaking flows
+- modern product UI, not a research demo
+- fully open source and free to run with your own infrastructure
+
+## Core Features
 
 - quick pronunciation drills for single words and short replies
-- guided learning modules for sounds, theory, practice, and assessment
-- conversation modules with turn-by-turn speaking practice
-- an AI Coach playground for open-topic speaking
-- transcript-based and target-based feedback flows
-- account, onboarding, checkout, and profile flows
+- guided sound modules with theory, practice, and assessment
+- conversation modules with turn-by-turn coach-led speaking
+- open-topic AI Coach for freer spoken practice
+- transcript-based and target-based response modes
+- authentication, onboarding, checkout, and profile flows
 
 ## Product Structure
 
@@ -32,6 +47,13 @@ Cadence currently has three main speaking experiences:
 - `Supabase` for auth and user data
 - `Stripe` for billing flows
 - `Python` model services for scoring, transcription, TTS, and coach generation
+
+## Who This Is For
+
+- English learners who want sharper pronunciation feedback
+- developers building speech-learning products
+- researchers or hackers who want a real full-stack pronunciation app to extend
+- founders exploring AI-native language-learning UX
 
 ## Architecture
 
@@ -91,6 +113,8 @@ cp .env.docker.example .env
 ```
 
 Fill in the values you actually use.
+
+If you want the shortest possible first run, use Docker. If you want the fastest product iteration loop, run the web app and both Python services locally.
 
 ## Running Cadence
 
@@ -220,6 +244,24 @@ Then point the web app to those services with:
 
 The pronunciation engine and the coach engine use different Python dependency stacks and model-serving needs. Keeping them separate makes deployment, warmup, and dependency management much more stable.
 
+## GitHub-Friendly Setup
+
+Cadence is organized to be easy to explore:
+
+- `src/app` for routes
+- `src/components` for interface and product flows
+- `src/lib` for shared product logic
+- `src/ai-engine` for pronunciation and audio intelligence
+- `src/coach-engine` for AI coach generation
+
+If you are opening the repo for the first time, start with:
+
+1. [README.md](./README.md)
+2. [CONTRIBUTING.md](./CONTRIBUTING.md)
+3. [src/app/page.tsx](./src/app/page.tsx)
+4. [src/components/coach/AiCoachPlayground.tsx](./src/components/coach/AiCoachPlayground.tsx)
+5. [src/ai-engine/main.py](./src/ai-engine/main.py)
+
 ## Open Source Notes
 
 - Cadence is free to use and open source under the MIT license.
@@ -228,17 +270,11 @@ The pronunciation engine and the coach engine use different Python dependency st
 
 ## Contributing
 
-Issues and pull requests are welcome. A good contribution usually includes:
-
-- a clear bug report or product problem
-- the smallest practical code change
-- a short validation note explaining how it was tested
-
-If you are changing AI or pronunciation behavior, include the exact scenario you tested so regressions are easier to spot.
+Issues and pull requests are welcome. Start with [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Security
 
-Please do not commit secrets, API keys, `.env` files, or provider tokens. If you discover a security issue, contact the maintainer privately before opening a public issue.
+Please do not commit secrets, API keys, `.env` files, or provider tokens. For security issues, see [SECURITY.md](./SECURITY.md).
 
 ## Status
 

@@ -4,14 +4,28 @@
   "description": "Open-source pronunciation training with AI feedback, guided speaking modules, and an open-topic coach.",
   "license": "MIT",
   "private": false,
+  "author": "Pavel Stepanov",
+  "homepage": "https://github.com/pstepanovum/Cadence",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pstepanovum/Cadence.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pstepanovum/Cadence/issues"
+  },
   "keywords": [
     "nextjs",
+    "typescript",
     "pronunciation",
+    "accent-training",
     "speech",
     "ai",
     "education",
     "supabase",
-    "stripe"
+    "stripe",
+    "language-learning",
+    "text-to-speech",
+    "speech-recognition"
   ],
   "scripts": {
     "dev": "next dev",
