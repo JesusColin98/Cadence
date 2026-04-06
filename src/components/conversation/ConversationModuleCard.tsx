@@ -18,7 +18,7 @@ export function ConversationModuleCard({
   const content = (
     <div
       className={cn(
-        "flex h-full min-h-[23rem] flex-col rounded-[2rem] px-6 py-6",
+        "flex h-full flex-col rounded-[2rem] px-5 py-5 sm:px-6 sm:py-6",
         module.isCompleted
           ? "bg-hunter-green text-bright-snow"
           : module.isUnlocked
@@ -95,7 +95,7 @@ export function ConversationModuleCard({
         </p>
       </div>
 
-      <div className="mt-5 rounded-3xl bg-white/10 px-4 py-4">
+      <div className="mt-4 rounded-3xl bg-white/10 px-4 py-4">
         <p
           className={cn(
             "text-sm leading-6",

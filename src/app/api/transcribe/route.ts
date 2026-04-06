@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Transcription is offline. If you are using Docker, make sure the ai-engine service is healthy. If you are running locally, start src/ai-engine/main.py first.",
+          "Transcription is offline. If you are using Docker, make sure the ai-engine service is healthy. If you are running locally, start src/backend/ai-engine/main.py first.",
       },
       { status: 503 },
     );

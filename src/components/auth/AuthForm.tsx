@@ -67,7 +67,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           emailRedirectTo:
             typeof window === "undefined"
               ? undefined
-              : `${window.location.origin}/auth/confirm?next=/checkout`,
+              : `${window.location.origin}/api/auth/confirm?next=/checkout`,
         },
       });
 
@@ -90,10 +90,10 @@ export function AuthForm({ mode }: AuthFormProps) {
   }
 
   return (
-    <Card className="w-full max-w-xl bg-transparent p-0 backdrop-blur-0">
-      <div className="space-y-8">
-        <div className="space-y-5 px-5 sm:px-6">
-          <Link href="/" className="inline-flex w-fit items-center">
+    <Card className="w-full max-w-[30rem] bg-transparent p-0 backdrop-blur-0">
+      <div className="space-y-6">
+        <div className="space-y-4 px-5 sm:px-6">
+          <div className="inline-flex w-fit items-center">
             <Image
               src="/logo/logo-green-white.svg"
               alt="Cadence logo"
@@ -102,10 +102,10 @@ export function AuthForm({ mode }: AuthFormProps) {
               className="h-[30px] w-auto object-contain"
               priority
             />
-          </Link>
+          </div>
 
           <div className="space-y-3">
-            <CardTitle className="text-3xl">
+            <CardTitle className="text-[2rem] leading-tight sm:text-[2.15rem]">
               {isLogin ? "Sign in to Cadence" : "Start your pronunciation profile"}
             </CardTitle>
             <CardDescription className="text-base">

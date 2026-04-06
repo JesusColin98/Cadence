@@ -518,7 +518,7 @@ export function ConversationSession({
           <div className="space-y-4">
             <div className="space-y-2">
               <p className="eyebrow text-sm text-yellow-green/82">Conversation module</p>
-              <h1 className="text-4xl font-semibold text-bright-snow sm:text-5xl">
+              <h1 className="text-3xl font-semibold text-bright-snow sm:text-4xl lg:text-5xl">
                 {module.title}
               </h1>
               <p className="max-w-3xl text-sm leading-7 text-bright-snow/78">
@@ -832,7 +832,7 @@ export function ConversationSession({
               }
             />
           ) : (
-            <div className="flex h-full min-h-[30rem] flex-col justify-center rounded-[2rem] bg-vanilla-cream px-5 py-5 text-center sm:px-6 sm:py-6">
+            <div className="flex h-full min-h-[20rem] flex-col justify-center rounded-[2rem] bg-vanilla-cream px-5 py-5 text-center sm:min-h-[30rem] sm:px-6 sm:py-6">
               <CardTitle className="text-3xl">
                 {phase === "intro"
                   ? "Conversation feedback appears here."

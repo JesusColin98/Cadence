@@ -46,7 +46,7 @@ export async function GET() {
       {
         ready: false,
         message:
-          "AI Coach is offline. If you are using Docker, make sure the coach-engine service is healthy. If you are running locally, start src/coach-engine/main.py after installing the coach dependencies.",
+          "AI Coach is offline. If you are using Docker, make sure the coach-engine service is healthy. If you are running locally, start src/backend/coach-engine/main.py after installing the coach dependencies.",
       },
       { status: 503 },
     );
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "AI Coach is offline. If you are using Docker, make sure the coach-engine service is healthy. If you are running locally, start src/coach-engine/main.py after installing the coach dependencies.",
+          "AI Coach is offline. If you are using Docker, make sure the coach-engine service is healthy. If you are running locally, start src/backend/coach-engine/main.py after installing the coach dependencies.",
       },
       { status: 503 },
     );

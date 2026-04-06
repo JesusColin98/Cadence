@@ -26,17 +26,17 @@ export function ConversationResult({
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
         <div className="rounded-[2rem] bg-hunter-green px-5 py-5 text-bright-snow sm:px-6 sm:py-6">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <ProgressRing
               score={score}
-              size={96}
+              size={88}
               strokeWidth={7}
               trackColor="rgba(255,255,255,0.18)"
-              className="[&>span]:text-bright-snow"
+              className="[&>span]:text-bright-snow shrink-0"
             />
             <div className="space-y-2">
               <p className="eyebrow text-xs text-yellow-green/84">Conversation result</p>
-              <h3 className="text-3xl font-semibold text-bright-snow">
+              <h3 className="text-2xl font-semibold text-bright-snow sm:text-3xl">
                 {passed ? "Module passed." : "Almost there."}
               </h3>
               <p className="text-sm leading-6 text-bright-snow/76">

@@ -181,7 +181,7 @@ export function PracticeStudio({
               <Activity size={18} filled color="currentColor" />
               Practice studio
             </div>
-            <h2 className="text-3xl font-semibold text-hunter-green">
+            <h2 className="text-2xl font-semibold text-hunter-green sm:text-3xl">
               One clean take, then a direct phoneme check.
             </h2>
             <p className="max-w-2xl text-sm leading-7 text-iron-grey">
@@ -194,7 +194,7 @@ export function PracticeStudio({
             <p className="eyebrow text-sm text-sage-green">Current target</p>
             <div className="mt-3 flex items-end justify-between gap-4">
               <div>
-                <p className="text-3xl font-semibold text-hunter-green">
+                <p className="text-2xl font-semibold text-hunter-green sm:text-3xl">
                   {targetWord}
                 </p>
                 <p className="mt-2 text-lg text-iron-grey">{targetPhonemes}</p>
@@ -312,7 +312,7 @@ export function PracticeStudio({
             </div>
           </div>
         ) : (
-          <div className="flex h-full min-h-[28rem] flex-col justify-center rounded-3xl bg-vanilla-cream/70 p-6 text-center">
+          <div className="flex h-full min-h-[18rem] flex-col justify-center rounded-3xl bg-vanilla-cream/70 p-6 text-center sm:min-h-[28rem]">
             <CardTitle>Ready for your first take</CardTitle>
             <CardDescription className="mt-3 text-base">
               Your latest pronunciation assessment appears here after the

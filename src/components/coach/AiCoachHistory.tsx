@@ -45,7 +45,7 @@ export function AiCoachHistory({ userId }: { userId: string }) {
       <Card className="bg-hunter-green text-bright-snow">
         <div className="space-y-3">
           <p className="eyebrow text-sm text-yellow-green">Coach history</p>
-          <h1 className="text-4xl font-semibold text-bright-snow sm:text-5xl">
+          <h1 className="text-3xl font-semibold text-bright-snow sm:text-4xl lg:text-5xl">
             Saved conversations you can reopen anytime.
           </h1>
           <p className="max-w-3xl text-base leading-7 text-bright-snow/78">

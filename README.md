@@ -14,6 +14,7 @@ Cadence is designed for people who want more than flashcards: it gives live spee
 - phoneme-aware pronunciation feedback instead of vague speaking scores
 - guided learning modules and open conversation in the same app
 - transcript-based and target-based speaking flows
+- native desktop app for macOS and Windows alongside the web experience
 - modern product UI, not a research demo
 - fully open source and free to run with your own infrastructure
 
@@ -25,10 +26,11 @@ Cadence is designed for people who want more than flashcards: it gives live spee
 - open-topic AI Coach for freer spoken practice
 - transcript-based and target-based response modes
 - authentication, onboarding, checkout, and profile flows
+- native desktop app (Electron) for macOS and Windows
 
 ## Product Structure
 
-Cadence currently has three main speaking experiences:
+Cadence has three main speaking experiences:
 
 1. `Learn`
    Structured pronunciation modules with theory, practice, and assessment.
@@ -47,6 +49,7 @@ Cadence currently has three main speaking experiences:
 - `Supabase` for auth and user data
 - `Stripe` for billing flows
 - `Python` model services for scoring, transcription, TTS, and coach generation
+- `Electron` for the macOS and Windows desktop app
 
 ## Who This Is For
 
@@ -60,39 +63,62 @@ Cadence currently has three main speaking experiences:
 Cadence is split into three services:
 
 - `web`
-  The Next.js application and user-facing API routes
+  The Next.js application and user-facing API routes.
 
-- `src/ai-engine`
-  Pronunciation scoring, reference audio generation, and transcription
+- `src/backend/ai-engine`
+  Pronunciation scoring, reference audio generation, and transcription.
 
-- `src/coach-engine`
-  Open-topic AI Coach turn generation
+- `src/backend/coach-engine`
+  Open-topic AI Coach turn generation.
 
 The browser only talks to the Next.js app. The Next.js API routes proxy requests to the Python services.
 
 ### Local service routing
 
-- `web` -> `http://127.0.0.1:8000`
-- `web` -> `http://127.0.0.1:8001`
+- `web` → `http://127.0.0.1:8000` (ai-engine)
+- `web` → `http://127.0.0.1:8001` (coach-engine)
 
 ### Docker service routing
 
-- `web` -> `http://ai-engine:8000`
-- `web` -> `http://coach-engine:8001`
+- `web` → `http://ai-engine:8000`
+- `web` → `http://coach-engine:8001`
 
 ## Repository Layout
 
 ```text
 .
-├── src/app                 # Next.js routes
-├── src/components          # UI and product components
-├── src/lib                 # shared web-side utilities and types
-├── src/ai-engine           # pronunciation / TTS / transcription service
-├── src/coach-engine        # AI Coach service
-├── public                  # static assets
-├── supabase                # Supabase project files
-├── Dockerfile              # web image
-└── docker-compose.yml      # full local stack
+├── src/
+│   ├── app/
+│   │   ├── (auth)/             # /login, /signup, /forgot-password, /reset-password
+│   │   ├── (dashboard)/        # /dashboard, /learn, /coach, /conversation, /profile
+│   │   │   ├── checkout/
+│   │   │   ├── coach/
+│   │   │   ├── conversation/
+│   │   │   ├── dashboard/
+│   │   │   ├── desktop/        # desktop app setup screen
+│   │   │   ├── learn/
+│   │   │   ├── onboarding/
+│   │   │   └── profile/
+│   │   ├── (landing)/          # /, /download, /contact, /help, /privacy, /terms
+│   │   └── api/                # all API routes, including api/auth/confirm
+│   ├── backend/
+│   │   ├── ai-engine/          # pronunciation scoring, TTS, transcription (Python)
+│   │   └── coach-engine/       # AI coach turn generation (Python)
+│   ├── components/             # UI and product components
+│   ├── hooks/                  # shared React hooks
+│   └── lib/                    # shared web-side utilities and types
+├── desktop/                    # Electron desktop app
+│   ├── src/
+│   │   ├── main.ts             # Electron main process
+│   │   └── preload.ts          # context bridge
+│   ├── assets/
+│   │   ├── icon.icns           # macOS app icon
+│   │   └── entitlements.mac.plist
+│   └── electron-builder.yml    # DMG / installer packaging config
+├── public/                     # static assets
+├── supabase/                   # Supabase project files
+├── Dockerfile                  # web image
+└── docker-compose.yml          # full local stack
 ```
 
 ## Quick Start
@@ -104,8 +130,6 @@ pnpm install
 ```
 
 ### 2. Create local environment files
-
-Start from the included template:
 
 ```bash
 cp .env.docker.example .env.local
@@ -120,37 +144,33 @@ If you want the shortest possible first run, use Docker. If you want the fastest
 
 ### Recommended local development flow
 
-This is the best day-to-day loop on macOS:
-
-Terminal 1:
+Terminal 1 — AI engine:
 
 ```bash
-cd src/ai-engine
+cd src/backend/ai-engine
 python main.py
 ```
 
-Terminal 2:
+Terminal 2 — Coach engine:
 
 ```bash
-cd src/coach-engine
+cd src/backend/coach-engine
 python main.py
 ```
 
-Terminal 3:
+Terminal 3 — Web app:
 
 ```bash
 pnpm dev
 ```
 
-Then open:
+Open:
 
-```text
+```
 http://localhost:3000
 ```
 
 ### Full stack with Docker
-
-From the repo root:
 
 ```bash
 docker compose --env-file .env.local up --build
@@ -162,13 +182,7 @@ Detached mode:
 docker compose --env-file .env.local up --build -d
 ```
 
-Open:
-
-```text
-http://localhost:3000
-```
-
-## Stopping the App Cleanly
+### Stopping the app
 
 Normal stop:
 
@@ -182,10 +196,72 @@ Recommended day-to-day stop:
 docker compose --env-file .env.local down --remove-orphans
 ```
 
-Full reset, including cached model downloads:
+Full reset including cached model downloads:
 
 ```bash
 docker compose --env-file .env.local down --volumes --remove-orphans
+```
+
+## Desktop App (Electron)
+
+Cadence ships a native desktop app for macOS and Windows, built with Electron. It wraps the full Next.js app in a native shell — no browser required.
+
+### Running the desktop app in development
+
+You need both the web dev server and Electron running simultaneously.
+
+Terminal 1 — Web app:
+
+```bash
+pnpm dev
+```
+
+Terminal 2 — Electron:
+
+```bash
+cd desktop
+pnpm install   # first time only
+pnpm dev       # compiles TypeScript then launches Electron
+```
+
+### Building a distributable (DMG / EXE)
+
+From the `desktop/` folder:
+
+```bash
+pnpm build
+```
+
+This runs `next build` (with `output: standalone`), compiles the Electron main process, then packages everything with `electron-builder`. Output lands in `desktop/packages/`.
+
+### App icon
+
+Place `desktop/assets/icon.icns` (1024×1024) before building for macOS. The file is already included in this repository.
+
+### Code signing and notarization
+
+Set the following environment variables before running `pnpm build` to sign and notarize for distribution outside the Mac App Store:
+
+```
+APPLE_ID=you@example.com
+APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx
+APPLE_TEAM_ID=XXXXXXXXXX
+CSC_LINK=path/to/certificate.p12
+CSC_KEY_PASSWORD=yourpassword
+```
+
+## Supabase Auth Callback
+
+The auth confirmation callback is served at:
+
+```
+/api/auth/confirm
+```
+
+Make sure your Supabase dashboard email templates (Confirm signup, Magic link, etc.) use this URL:
+
+```
+https://your-domain.com/api/auth/confirm
 ```
 
 ## Environment Variables
@@ -230,15 +306,15 @@ Model-service variables:
 
 Deploy the Next.js app to Vercel and run the Python services on separate infrastructure.
 
-- Vercel:
-  hosts the web app
-- AI host or VPS:
-  hosts `src/ai-engine` and `src/coach-engine`
+- Vercel — hosts the web app
+- AI host or VPS — hosts `src/backend/ai-engine` and `src/backend/coach-engine`
 
-Then point the web app to those services with:
+Then point the web app to those services:
 
-- `AI_ENGINE_URL=https://ai.your-domain.com`
-- `AI_COACH_ENGINE_URL=https://coach.your-domain.com`
+```
+AI_ENGINE_URL=https://ai.your-domain.com
+AI_COACH_ENGINE_URL=https://coach.your-domain.com
+```
 
 ### Why the AI services are separate
 
@@ -246,27 +322,22 @@ The pronunciation engine and the coach engine use different Python dependency st
 
 ## GitHub-Friendly Setup
 
-Cadence is organized to be easy to explore:
-
-- `src/app` for routes
-- `src/components` for interface and product flows
-- `src/lib` for shared product logic
-- `src/ai-engine` for pronunciation and audio intelligence
-- `src/coach-engine` for AI coach generation
-
 If you are opening the repo for the first time, start with:
 
 1. [README.md](./README.md)
 2. [CONTRIBUTING.md](./CONTRIBUTING.md)
-3. [src/app/page.tsx](./src/app/page.tsx)
-4. [src/components/coach/AiCoachPlayground.tsx](./src/components/coach/AiCoachPlayground.tsx)
-5. [src/ai-engine/main.py](./src/ai-engine/main.py)
+3. [src/app/(landing)/page.tsx](./src/app/(landing)/page.tsx) — landing page
+4. [src/app/(dashboard)/dashboard/page.tsx](./src/app/(dashboard)/dashboard/page.tsx) — main app entry
+5. [src/components/coach/AiCoachPlayground.tsx](./src/components/coach/AiCoachPlayground.tsx) — AI coach UI
+6. [src/backend/ai-engine/main.py](./src/backend/ai-engine/main.py) — pronunciation service
+7. [desktop/src/main.ts](./desktop/src/main.ts) — Electron main process
 
 ## Open Source Notes
 
 - Cadence is free to use and open source under the MIT license.
 - The repository is meant to be a real product codebase, not a minimal starter.
-- If you fork it, make sure you configure your own Supabase, Stripe, email, and model-service credentials.
+- If you fork it, configure your own Supabase, Stripe, email, and model-service credentials.
+- The desktop app requires the web app to be running locally in development mode.
 
 ## Contributing
 
@@ -278,4 +349,4 @@ Please do not commit secrets, API keys, `.env` files, or provider tokens. For se
 
 ## Status
 
-Cadence is actively evolving. The UI, learning flows, and model stack are moving quickly, so expect ongoing changes as the product matures.
+Cadence is actively evolving. The UI, learning flows, model stack, and desktop app are all moving quickly, so expect ongoing changes as the product matures.

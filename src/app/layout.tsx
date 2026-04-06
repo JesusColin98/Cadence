@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Funnel_Display, Sour_Gummy } from "next/font/google";
 import "./globals.css";
 import "lenis/dist/lenis.css";
-import { SmoothScroll } from "@/components/ui/smooth-scroll";
+import { AppShell } from "@/components/ui/app-shell";
 
 const funnelDisplay = Funnel_Display({
   weight: ["300", "400", "500", "600", "700", "800"],
@@ -83,7 +83,7 @@ export default function RootLayout({
       <body
         className={`${funnelDisplay.className} min-h-screen bg-vanilla-cream`}
       >
-        <SmoothScroll>{children}</SmoothScroll>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

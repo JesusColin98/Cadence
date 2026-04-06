@@ -1,6 +1,7 @@
 // FILE: src/components/ui/module-progress.tsx
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ModuleProgressFrame } from "@/components/ui/module-progress-frame";
 import {
   CONVERSATION_MODULES,
   CONVERSATION_PROGRESS_COOKIE,
@@ -12,22 +13,25 @@ function ProgressBar({
   label,
   countLabel,
   percent,
+  variant = "default",
 }: {
   label: string;
   countLabel: string;
   percent: number;
+  variant?: "default" | "dark";
 }) {
+  const isDark = variant === "dark";
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="eyebrow text-[10px] text-sage-green whitespace-nowrap">
+        <span className={`eyebrow text-[10px] whitespace-nowrap ${isDark ? "text-white" : "text-sage-green"}`}>
           {label}
         </span>
-        <span className="text-xs font-semibold tabular-nums text-hunter-green">
+        <span className={`text-xs font-semibold tabular-nums ${isDark ? "text-white" : "text-hunter-green"}`}>
           {countLabel}
         </span>
       </div>
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-vanilla-cream">
+      <div className={`h-2.5 w-full overflow-hidden rounded-full ${isDark ? "bg-white/20" : "bg-alabaster-grey"}`}>
         <div
           className="h-full rounded-full bg-sage-green"
           style={{ width: `${percent}%` }}
@@ -37,7 +41,7 @@ function ProgressBar({
   );
 }
 
-export async function ModuleProgress() {
+export async function ModuleProgress({ variant = "default" }: { variant?: "default" | "dark" } = {}) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -73,20 +77,20 @@ export async function ModuleProgress() {
   if (overallTotal === 0) return null;
 
   return (
-    <div className="w-full">
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 rounded-[2rem] bg-white px-5 py-4 sm:px-6 lg:flex-row lg:items-center">
-        <ProgressBar
-          label="Module progress"
-          countLabel={`${completedModules}/${Math.max(totalModules, 0)}`}
-          percent={modulePercent}
-        />
-        <div className="hidden h-10 w-px rounded-full bg-vanilla-cream lg:block" />
-        <ProgressBar
-          label="Overall progress"
-          countLabel={`${overallCompleted}/${overallTotal}`}
-          percent={overallPercent}
-        />
-      </div>
-    </div>
+    <ModuleProgressFrame>
+      <ProgressBar
+        label="Module progress"
+        countLabel={`${completedModules}/${Math.max(totalModules, 0)}`}
+        percent={modulePercent}
+        variant={variant}
+      />
+      <div className={`hidden h-10 w-px rounded-full lg:block ${variant === "dark" ? "bg-white/20" : "bg-alabaster-grey"}`} />
+      <ProgressBar
+        label="Overall progress"
+        countLabel={`${overallCompleted}/${overallTotal}`}
+        percent={overallPercent}
+        variant={variant}
+      />
+    </ModuleProgressFrame>
   );
 }

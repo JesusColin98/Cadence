@@ -148,3 +148,29 @@ select {
     transform: translateX(0);
   }
 }
+
+/* ── Desktop (Electron) scrollbar ─────────────────────────────────────────
+   The .electron class is added to <html> synchronously by preload.ts before
+   first paint, so there is no flash of the default browser scrollbar.      */
+
+.electron ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.electron ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.electron ::-webkit-scrollbar-thumb {
+  background: rgba(56, 102, 65, 0.25);   /* hunter-green at low opacity */
+  border-radius: 9999px;
+}
+
+.electron ::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 102, 65, 0.5);
+}
+
+.electron ::-webkit-scrollbar-corner {
+  background: transparent;
+}

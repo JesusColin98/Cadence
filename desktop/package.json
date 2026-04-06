@@ -1,0 +1,27 @@
+{
+  "name": "cadence-desktop",
+  "version": "0.1.0",
+  "description": "Cadence desktop application",
+  "author": "Pavel Stepanov",
+  "license": "MIT",
+  "main": "dist/main.js",
+  "private": true,
+  "scripts": {
+    "prebuild": "node ./scripts/prepare-build.mjs",
+    "dev": "tsc -p tsconfig.json && electron .",
+    "dev:watch": "concurrently \"tsc -p tsconfig.json -w\" \"electron .\"",
+    "compile": "tsc -p tsconfig.json",
+    "build:next": "pnpm --dir .. build && node ./scripts/fix-standalone.mjs",
+    "build": "pnpm build:next && pnpm compile && electron-builder",
+    "build:mac": "pnpm build:next && pnpm compile && electron-builder --mac",
+    "build:dir": "pnpm build:next && pnpm compile && electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "concurrently": "^9.0.0",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5"
+  }
+}

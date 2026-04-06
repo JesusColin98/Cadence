@@ -1,7 +1,8 @@
 // FILE: src/components/ui/navbar.tsx
 import Link from "next/link";
-import { Settings } from "griddy-icons";
+import { Download, Settings } from "griddy-icons";
 import { BrandMark } from "@/components/ui/brand-mark";
+import { NavbarFrame } from "@/components/ui/navbar-frame";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -13,16 +14,18 @@ type NavKey =
   | "signup"
   | "conversation"
   | "coach"
-  | "profile";
+  | "profile"
+  | "download";
 
 interface NavbarProps {
   current?: NavKey;
+  variant?: "default" | "dark";
 }
 
 const navBaseClass =
   "inline-flex min-h-11 items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold whitespace-nowrap";
 
-export async function Navbar({ current }: NavbarProps) {
+export async function Navbar({ current, variant = "default" }: NavbarProps) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -72,51 +75,79 @@ export async function Navbar({ current }: NavbarProps) {
         },
       ];
 
+  const isDark = variant === "dark";
+
+  // Inactive item styles differ between default (white card) and dark (green card)
+  const inactiveClass = isDark
+    ? "bg-white/10 text-bright-snow hover:bg-white/20"
+    : "bg-vanilla-cream text-hunter-green hover:bg-[#eadfbe]";
+
+  const activeClass = "bg-yellow-green text-hunter-green";
+
+  const signupCtaClass = isDark
+    ? "bg-yellow-green text-hunter-green hover:bg-[#b5d567]"
+    : "bg-yellow-green text-hunter-green hover:bg-[#b5d567]";
+
   return (
-    <header className="rounded-3xl bg-white px-5 py-4 text-hunter-green">
-      <div className="flex flex-wrap items-center justify-between gap-4 md:flex-nowrap">
-        <Link
-          href={logoHref}
-          className="flex h-11 items-center justify-center self-center"
-        >
-          <BrandMark />
-        </Link>
+    <NavbarFrame variant={variant}>
+      <Link
+        href={logoHref}
+        className="flex h-11 items-center justify-center self-center"
+      >
+        <BrandMark variant={isDark ? "white" : "dark"} />
+      </Link>
 
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto self-center">
-          {navItems.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={cn(
-                navBaseClass,
-                current === item.key
-                  ? "bg-yellow-green text-hunter-green"
-                  : item.key === "signup" && !isAuthenticated
-                    ? "bg-yellow-green text-hunter-green hover:bg-[#b5d567]"
-                    : "bg-vanilla-cream text-hunter-green hover:bg-[#eadfbe]",
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto self-center">
+        {navItems.map((item) => (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={cn(
+              navBaseClass,
+              current === item.key
+                ? activeClass
+                : item.key === "signup" && !isAuthenticated
+                  ? signupCtaClass
+                  : inactiveClass,
+            )}
+          >
+            {item.label}
+          </Link>
+        ))}
 
-          {isAuthenticated && (
-            <Link
-              href="/profile"
-              className={cn(
-                navBaseClass,
-                "min-h-11 w-11 px-0",
-                current === ("profile" satisfies NavKey)
-                  ? "bg-yellow-green text-hunter-green"
-                  : "bg-vanilla-cream text-hunter-green hover:bg-[#eadfbe]",
-              )}
-              aria-label="Profile & settings"
-            >
-              <Settings size={18} color="currentColor" />
-            </Link>
-          )}
-        </div>
+        {!isAuthenticated && (
+          <Link
+            href="/download"
+            className={cn(
+              navBaseClass,
+              "gap-1.5",
+              current === ("download" satisfies NavKey)
+                ? activeClass
+                : inactiveClass,
+            )}
+            aria-label="Download desktop app"
+          >
+            <Download size={15} color="currentColor" />
+            Download
+          </Link>
+        )}
+
+        {isAuthenticated && (
+          <Link
+            href="/profile"
+            className={cn(
+              navBaseClass,
+              "min-h-11 w-11 px-0",
+              current === ("profile" satisfies NavKey)
+                ? activeClass
+                : inactiveClass,
+            )}
+            aria-label="Profile & settings"
+          >
+            <Settings size={18} color="currentColor" />
+          </Link>
+        )}
       </div>
-    </header>
+    </NavbarFrame>
   );
 }

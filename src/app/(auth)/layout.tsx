@@ -5,44 +5,43 @@ import { SplitText } from "@/components/ui/split-text";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen overflow-hidden px-4 py-4 sm:h-screen sm:px-5 sm:py-5">
-      <div className="mx-auto h-full max-w-7xl">
-        <div className="grid h-full gap-3 lg:grid-cols-[1.08fr_0.92fr] lg:gap-3">
-          <section className="rounded-[2rem] bg-hunter-green p-5 text-bright-snow sm:p-6 lg:p-8">
-            <div className="flex h-full flex-col justify-between gap-6">
-              <div className="max-w-lg space-y-5">
+    <main className="h-screen overflow-hidden bg-[#efe4c8]">
+      <div className="grid h-full min-h-0 md:grid-cols-[1.06fr_0.94fr]">
+        <section className="min-h-0 bg-hunter-green text-bright-snow md:rounded-r-[2.35rem]">
+          <div className="flex h-full min-h-0 flex-col justify-between gap-6 px-6 pb-6 pt-[4.9rem] sm:px-8 sm:pb-8 sm:pt-[5.35rem] lg:px-10 lg:pb-10 lg:pt-[5.6rem]">
+            <div className="max-w-xl space-y-4">
                 <SplitText
                   text="Keep your pronunciation practice moving."
                   tag="h1"
                   delay={30}
                   duration={760}
-                  className="max-w-md text-4xl font-semibold leading-tight sm:text-[3.2rem]"
+                  className="max-w-md text-[2.5rem] font-semibold leading-[1.02] sm:text-[2.9rem] lg:text-[3.2rem]"
                 />
-                <p className="max-w-md text-sm leading-7 text-bright-snow/78 sm:text-base">
+                <p className="max-w-md text-sm leading-7 text-bright-snow/78 sm:text-[0.98rem]">
                   Log in, recover access, and return to the next speaking round without losing progress.
                 </p>
               </div>
 
               <div className="rounded-[2rem] bg-vanilla-cream p-4 text-hunter-green sm:p-5">
-                <div className="grid gap-3 md:grid-cols-[0.92fr_1.08fr] md:items-center">
+                <div className="grid gap-3 sm:grid-cols-[0.96fr_1.04fr] sm:items-center">
                   <div className="space-y-2">
                     <p className="eyebrow text-sm text-sage-green">
                       Practice flow
                     </p>
-                    <h2 className="text-[1.7rem] font-semibold">
+                    <h2 className="text-[1.45rem] font-semibold leading-tight sm:text-[1.65rem]">
                       One account for progress, streaks, and saved takes.
                     </h2>
                     <p className="text-sm leading-7 text-iron-grey">
                       Return to your studio and pick up exactly where the last speaking round ended.
                     </p>
                   </div>
-                  <div className="flex items-center justify-center">
+                  <div className="hidden items-center justify-center sm:flex">
                     <Image
                       src="/illustration/progress-1.svg"
                       alt="Learner illustration"
                       width={280}
                       height={220}
-                      className="h-auto w-full max-w-[14rem] object-contain sm:max-w-[15rem]"
+                      className="h-auto w-full max-w-[12.5rem] object-contain lg:max-w-[14rem]"
                     />
                   </div>
                 </div>
@@ -50,10 +49,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             </div>
           </section>
 
-          <section className="flex h-full items-center justify-center py-1 lg:py-3">
+          <section className="flex min-h-0 items-center justify-center bg-[#efe4c8] px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
             {children}
           </section>
-        </div>
       </div>
     </main>
   );

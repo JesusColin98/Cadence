@@ -40,7 +40,7 @@ services:
     env_file:
       - .env.local
     build:
-      context: ./src/ai-engine
+      context: ./src/backend/ai-engine
       dockerfile: Dockerfile
     environment:
       AI_ENGINE_HOST: 0.0.0.0
@@ -64,7 +64,7 @@ services:
     env_file:
       - .env.local
     build:
-      context: ./src/coach-engine
+      context: ./src/backend/coach-engine
       dockerfile: Dockerfile
     environment:
       COACH_ENGINE_HOST: 0.0.0.0

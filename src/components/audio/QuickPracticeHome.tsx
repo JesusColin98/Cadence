@@ -50,7 +50,7 @@ export function QuickPracticeHome({ modules }: QuickPracticeHomeProps) {
             </div>
 
             <div className="space-y-3">
-              <h1 className="text-4xl font-semibold text-bright-snow sm:text-5xl">
+              <h1 className="text-3xl font-semibold text-bright-snow sm:text-4xl lg:text-5xl">
                 Quick practice
               </h1>
               <p className="max-w-2xl text-base leading-7 text-bright-snow/78">
@@ -117,7 +117,7 @@ export function QuickPracticeHome({ modules }: QuickPracticeHomeProps) {
               </div>
 
               <div className="rounded-3xl bg-vanilla-cream px-5 py-5">
-                <p className="text-4xl font-semibold text-hunter-green">
+                <p className="text-3xl font-semibold text-hunter-green sm:text-4xl">
                   {currentTarget.label}
                 </p>
                 <p className="mt-2 text-lg text-iron-grey">{currentTarget.ipa}</p>

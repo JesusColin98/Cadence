@@ -826,7 +826,7 @@ export function AiCoachPlayground({ userId }: { userId: string }) {
               </div>
 
               <div className="space-y-3">
-                <h1 className="text-4xl font-semibold text-bright-snow sm:text-5xl">
+                <h1 className="text-3xl font-semibold text-bright-snow sm:text-4xl lg:text-5xl">
                   Open-topic speaking practice with a live pronunciation coach.
                 </h1>
                 <p className="max-w-3xl text-base leading-7 text-bright-snow/78">
@@ -837,7 +837,7 @@ export function AiCoachPlayground({ userId }: { userId: string }) {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
               <div className="rounded-3xl bg-white/10 px-4 py-4">
                 <p className="eyebrow text-xs text-yellow-green/82">Turns scored</p>
                 <p className="mt-2 text-2xl font-semibold text-bright-snow">
@@ -849,19 +849,19 @@ export function AiCoachPlayground({ userId }: { userId: string }) {
                 <div className="mt-2 flex items-center gap-3">
                   <ProgressRing
                     score={averageScore}
-                    size={68}
-                    strokeWidth={6}
+                    size={52}
+                    strokeWidth={5}
                     valueLabel={completedTurns.length === 0 ? "0" : `${averageScore}`}
                     trackColor="rgba(255,255,255,0.18)"
-                    className="[&_span]:text-bright-snow"
+                    className="[&_span]:text-bright-snow shrink-0"
                   />
-                  <p className="text-sm leading-6 text-bright-snow/78">
+                  <p className="hidden text-sm leading-6 text-bright-snow/78 lg:block">
                     Keep the conversation moving and the score climbs with each
                     stronger reply.
                   </p>
                 </div>
               </div>
-              <div className="rounded-3xl bg-white/10 px-4 py-4">
+              <div className="col-span-2 rounded-3xl bg-white/10 px-4 py-4 lg:col-span-1">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
                     <p className="eyebrow text-xs text-yellow-green/82">
@@ -870,7 +870,7 @@ export function AiCoachPlayground({ userId }: { userId: string }) {
                     <p className="text-2xl font-semibold text-bright-snow">
                       {savedSessions.length}
                     </p>
-                    <p className="text-sm leading-6 text-bright-snow/78">
+                    <p className="hidden text-sm leading-6 text-bright-snow/78 sm:block">
                       Restore any recent coach session and keep going from where you left it.
                     </p>
                   </div>

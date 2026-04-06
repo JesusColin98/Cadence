@@ -1,5 +1,5 @@
 // FILE: src/lib/practice-targets.ts
-import practiceTargetsData from "@/ai-engine/practice_targets.json";
+import practiceTargetsData from "@/backend/ai-engine/practice_targets.json";
 
 interface PracticeTargetSegment {
   text: string;

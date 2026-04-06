@@ -71,7 +71,7 @@ export async function GET() {
         needsRestartHint: false,
         loadError: "FastAPI engine is not reachable.",
         message:
-          "FastAPI is offline. Start src/ai-engine/main.py inside your gesture-music conda environment first.",
+          "FastAPI is offline. Start src/backend/ai-engine/main.py inside your gesture-music conda environment first.",
       },
       { status: 503 },
     );
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Pronunciation scoring is offline. If you are using Docker, make sure the ai-engine service is healthy. If you are running locally, start src/ai-engine/main.py first.",
+          "Pronunciation scoring is offline. If you are using Docker, make sure the ai-engine service is healthy. If you are running locally, start src/backend/ai-engine/main.py first.",
       },
       { status: 503 },
     );

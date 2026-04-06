@@ -62,10 +62,10 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="w-full max-w-xl bg-transparent p-0 backdrop-blur-0">
-      <div className="space-y-4">
-        <div className="space-y-5 px-5 sm:px-6">
-          <Link href="/" className="inline-flex w-fit items-center">
+    <Card className="w-full max-w-[30rem] bg-transparent p-0 backdrop-blur-0">
+      <div className="space-y-6">
+        <div className="space-y-4 px-5 sm:px-6">
+          <div className="inline-flex w-fit items-center">
             <Image
               src="/logo/logo-green-white.svg"
               alt="Cadence logo"
@@ -74,10 +74,10 @@ export function ForgotPasswordForm() {
               className="h-[30px] w-auto object-contain"
               priority
             />
-          </Link>
+          </div>
 
           <div className="space-y-3">
-            <CardTitle className="text-3xl">Reset your password</CardTitle>
+            <CardTitle className="text-[2rem] leading-tight sm:text-[2.15rem]">Reset your password</CardTitle>
             <CardDescription className="text-base">
               Enter the email tied to your Cadence account and we&apos;ll send the reset link.
             </CardDescription>

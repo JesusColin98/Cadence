@@ -2,6 +2,8 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Required for Electron packaging: produces .next/standalone/server.js
+  output: 'standalone',
   turbopack: {
     root: path.join(__dirname),
   },

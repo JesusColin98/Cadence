@@ -31,7 +31,7 @@ export function ConversationModuleGrid({
           <div className="space-y-5">
             <div className="space-y-3">
               <p className="eyebrow text-sm text-yellow-green/82">Track structure</p>
-              <h1 className="text-4xl font-semibold text-bright-snow sm:text-5xl">
+              <h1 className="text-3xl font-semibold text-bright-snow sm:text-4xl lg:text-5xl">
                 Two tracks, one accent goal.
               </h1>
               <p className="max-w-3xl text-sm leading-7 text-bright-snow/78">
@@ -90,8 +90,8 @@ export function ConversationModuleGrid({
                 </p>
               </div>
 
-              <div className="flex items-center gap-4">
-                <ProgressRing score={completionRate} size={88} strokeWidth={7} />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                <ProgressRing score={completionRate} size={80} strokeWidth={7} className="shrink-0" />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-hunter-green">
                     {completed} conversation modules passed
