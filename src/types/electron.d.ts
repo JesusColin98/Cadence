@@ -56,6 +56,7 @@ interface DesktopRuntimeDetails {
     ready: boolean
     loadError: string | null
     device: string | null
+    provider: string | null
     language: string
     instruct: string
   }

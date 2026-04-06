@@ -171,23 +171,30 @@ async def health() -> dict[str, object]:
     if not speech_transcriber.model_loaded:
         ensure_transcriber_warmup_started(force=True)
 
+    tts_status = reference_tts.get_status()
+    tts_ready = tts_status.get("ttsReady") is True
+    transcriber_ready = speech_transcriber.model_loaded
+    model_ready = scorer.model_loaded
+    overall_ready = bool(model_ready and transcriber_ready and tts_ready)
+
     payload = {
-        "status": "ok" if scorer.model_loaded else "warming",
+        "status": "ok" if overall_ready else "warming",
         "model": MODEL_NAME,
-        "modelReady": scorer.model_loaded,
+        "modelReady": model_ready,
         "loadError": scorer.load_error,
         "hfTokenConfigured": bool(os.getenv("HF_TOKEN")),
         "diagnostics": scorer.get_diagnostics(),
-        **reference_tts.get_status(),
+        **tts_status,
         **speech_transcriber.get_status(),
     }
     logger.info(
-        "Health response status=%s modelReady=%s loadError=%s ttsReady=%s ttsDevice=%s",
+        "Health response status=%s modelReady=%s loadError=%s ttsReady=%s ttsDevice=%s ttsProvider=%s",
         payload["status"],
         payload["modelReady"],
         payload["loadError"],
         payload["ttsReady"],
         payload["ttsDevice"],
+        payload.get("ttsProvider"),
     )
     return payload
 

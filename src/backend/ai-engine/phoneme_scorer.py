@@ -3,22 +3,27 @@ from __future__ import annotations
 
 import importlib.metadata
 import importlib.util
+import io
 import json
 import logging
 import os
 import re
 import shutil
 import sys
-import tempfile
 from typing import Any
 
 import pathlib
 
 import numpy as np
-import librosa
+import soundfile as sf
 
 
 MODEL_NAME = "facebook/wav2vec2-xlsr-53-espeak-cv-ft"
+# The default branch of this model still exposes pickle weights. Pin the
+# known safetensors snapshot so desktop installs can stay on the Intel-safe
+# torch build while satisfying the newer transformers security checks.
+MODEL_REVISION = "3e836924cfd3b858a0bbdbc1f7ef412105d00446"
+MODEL_WEIGHTS_FILENAME = "model.safetensors"
 logger = logging.getLogger("cadence.ai_engine.scorer")
 
 _TARGETS_PATH = pathlib.Path(__file__).parent / "practice_targets.json"
@@ -26,6 +31,8 @@ with _TARGETS_PATH.open(encoding="utf-8") as _f:
     PRACTICE_TARGETS: dict[str, dict[str, Any]] = json.load(_f)
 
 logger.info("Loaded %d practice targets from %s", len(PRACTICE_TARGETS), _TARGETS_PATH)
+
+TARGET_SAMPLE_RATE = 16000
 
 
 def _clamp(value: int, minimum: int, maximum: int) -> int:
@@ -67,21 +74,42 @@ def _decode_ctc_predictions(
 
 
 def _load_audio(audio_bytes: bytes, filename: str | None = None) -> np.ndarray:
-    suffix = os.path.splitext(filename or "recording.wav")[1] or ".wav"
-
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
-        temp_file.write(audio_bytes)
-        temp_path = temp_file.name
+    del filename
 
     try:
-        waveform, _sample_rate = librosa.load(temp_path, sr=16000, mono=True)
-    finally:
-        os.unlink(temp_path)
+        waveform, sample_rate = sf.read(
+            io.BytesIO(audio_bytes),
+            dtype="float32",
+            always_2d=True,
+        )
+    except Exception as exc:
+        raise ValueError("The uploaded file did not contain decodable WAV audio.") from exc
 
     if waveform.size == 0:
         raise ValueError("The uploaded file did not contain decodable audio.")
 
-    return waveform.astype(np.float32)
+    mono_waveform = waveform.mean(axis=1, dtype=np.float32)
+    if mono_waveform.size == 0:
+        raise ValueError("The uploaded file did not contain decodable audio.")
+
+    if sample_rate != TARGET_SAMPLE_RATE:
+        duration_seconds = mono_waveform.size / max(sample_rate, 1)
+        target_length = max(1, int(round(duration_seconds * TARGET_SAMPLE_RATE)))
+        source_positions = np.linspace(
+            0,
+            mono_waveform.size - 1,
+            num=mono_waveform.size,
+            dtype=np.float32,
+        )
+        target_positions = np.linspace(
+            0,
+            mono_waveform.size - 1,
+            num=target_length,
+            dtype=np.float32,
+        )
+        mono_waveform = np.interp(target_positions, source_positions, mono_waveform)
+
+    return mono_waveform.astype(np.float32, copy=False)
 
 
 def _tokenize_visible_words(text: str) -> list[str]:
@@ -410,6 +438,7 @@ class PhonemeScorer:
         reference_synthesizer: Any | None = None,
     ) -> None:
         self.model_name = model_name
+        self.model_revision = MODEL_REVISION
         self.reference_synthesizer = reference_synthesizer
         self.model_loaded = False
         self.load_error: str | None = None
@@ -444,6 +473,8 @@ class PhonemeScorer:
             "modelLoaded": self.model_loaded,
             "loadError": self.load_error,
             "modelName": self.model_name,
+            "modelRevision": self.model_revision,
+            "modelWeights": MODEL_WEIGHTS_FILENAME,
             "device": str(self.device) if self.device is not None else None,
         }
 
@@ -465,15 +496,29 @@ class PhonemeScorer:
             return
 
         try:
-            vocab_path = hf_hub_download(repo_id=self.model_name, filename="vocab.json")
+            vocab_path = hf_hub_download(
+                repo_id=self.model_name,
+                filename="vocab.json",
+                revision=self.model_revision,
+            )
+            hf_hub_download(
+                repo_id=self.model_name,
+                filename=MODEL_WEIGHTS_FILENAME,
+                revision=self.model_revision,
+            )
             with open(vocab_path, "r", encoding="utf-8") as vocab_file:
                 vocab = json.load(vocab_file)
 
             self.id_to_token = {token_id: token for token, token_id in vocab.items()}
             self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
-                self.model_name
+                self.model_name,
+                revision=self.model_revision,
             )
-            self.model = Wav2Vec2ForCTC.from_pretrained(self.model_name)
+            self.model = Wav2Vec2ForCTC.from_pretrained(
+                self.model_name,
+                revision=self.model_revision,
+                use_safetensors=True,
+            )
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.model.to(self.device)
             self.model.eval()
@@ -496,10 +541,11 @@ class PhonemeScorer:
         self.model_loaded = True
         self.load_error = None
         logger.info(
-            "Warmup complete. device=%s blank_id=%s vocab_size=%s",
+            "Warmup complete. device=%s blank_id=%s vocab_size=%s revision=%s",
             self.device,
             self.blank_id,
             len(self.id_to_token),
+            self.model_revision,
         )
 
     def _decode_waveform(self, waveform: np.ndarray) -> str:

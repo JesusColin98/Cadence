@@ -436,7 +436,7 @@ export function ProfileDesktopRuntime() {
                   modelId={runtime.tts.modelId}
                   ready={runtime.tts.ready}
                   device={runtime.tts.device}
-                  detail={`Language: ${runtime.tts.language} · Cadence now cleans and retries unstable voice outputs automatically.`}
+                  detail={`Provider: ${runtime.tts.provider ?? "unknown"} · Language: ${runtime.tts.language}`}
                   error={runtime.tts.loadError}
                 />
                 <ModelCard

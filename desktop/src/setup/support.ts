@@ -68,6 +68,7 @@ export class DesktopSetupSupport {
   readonly runtimeDir = join(this.setupRoot, 'runtime')
   readonly modelsDir = join(this.setupRoot, 'models')
   readonly venvsDir = join(this.setupRoot, 'venvs')
+  readonly cacheDir = join(this.setupRoot, 'cache')
   readonly setupFilePath = join(this.setupRoot, 'setup.json')
   readonly logFilePath = join(this.logsDir, 'desktop-setup.log')
   readonly runtimeManifestPath = join(this.runtimeDir, 'runtime-manifest.json')
@@ -196,7 +197,8 @@ export class DesktopSetupSupport {
     const aiEngineReady = aiPayload?.modelReady === true
     const coachEngineReady = coachPayload?.ready === true
     const transcriberReady = aiPayload?.transcriberReady === true
-    const ttsReady = aiPayload?.ttsReady === true
+    const ttsReady =
+      aiPayload?.ttsReady === true && aiPayload?.ttsProvider === 'omnivoice'
 
     const health = {
       aiEngineReady,
@@ -618,6 +620,7 @@ export class DesktopSetupSupport {
     await mkdir(this.runtimeDir, { recursive: true })
     await mkdir(this.modelsDir, { recursive: true })
     await mkdir(this.venvsDir, { recursive: true })
+    await mkdir(this.cacheDir, { recursive: true })
     await mkdir(join(this.modelsDir, 'huggingface'), { recursive: true })
     await appendFile(this.logFilePath, '', 'utf8')
     await appendFile(this.aiEngineLogPath, '', 'utf8')
@@ -680,10 +683,12 @@ export class DesktopSetupSupport {
 
   private createServiceEnv(serviceName: ServiceName): NodeJS.ProcessEnv {
     const threadCount = String(this.getHostCpuCount())
+    const huggingFaceDir = join(this.modelsDir, 'huggingface')
     const shared = {
       ...process.env,
-      HF_HOME: join(this.modelsDir, 'huggingface'),
-      TRANSFORMERS_CACHE: join(this.modelsDir, 'huggingface'),
+      HF_HOME: huggingFaceDir,
+      HF_HUB_CACHE: huggingFaceDir,
+      XDG_CACHE_HOME: this.cacheDir,
       CADENCE_LOG_LEVEL: 'INFO',
       CADENCE_CPU_THREADS: threadCount,
       OMP_NUM_THREADS: threadCount,
@@ -692,6 +697,8 @@ export class DesktopSetupSupport {
       MKL_NUM_THREADS: threadCount,
       VECLIB_MAXIMUM_THREADS: threadCount,
       NUMEXPR_NUM_THREADS: threadCount,
+      PIP_NO_CACHE_DIR: '1',
+      PIP_DISABLE_PIP_VERSION_CHECK: '1',
       PYTHONUNBUFFERED: '1',
       HF_TOKEN: process.env.HF_TOKEN ?? '',
     }
@@ -701,7 +708,8 @@ export class DesktopSetupSupport {
         ...shared,
         AI_ENGINE_HOST: '127.0.0.1',
         AI_ENGINE_PORT: '8000',
-        CADENCE_TTS_PROVIDER: 'say',
+        CADENCE_TTS_PROVIDER: 'auto',
+        CADENCE_TTS_REQUIRE_MODEL: '1',
       }
     }
 
@@ -776,7 +784,16 @@ export class DesktopSetupSupport {
 
     const upgradePip = await this.runCommand(
       pythonPath,
-      ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel'],
+      [
+        '-m',
+        'pip',
+        'install',
+        '--no-cache-dir',
+        '--upgrade',
+        'pip',
+        'setuptools',
+        'wheel',
+      ],
       {
         allowFailure: true,
         cwd: serviceDir,
@@ -796,7 +813,7 @@ export class DesktopSetupSupport {
 
     const installRequirements = await this.runCommand(
       pythonPath,
-      ['-m', 'pip', 'install', '-r', requirementsFile],
+      ['-m', 'pip', 'install', '--no-cache-dir', '-r', requirementsFile],
       {
         allowFailure: true,
         cwd: serviceDir,
@@ -1078,6 +1095,7 @@ export class DesktopSetupSupport {
         ready: health.ttsReady,
         loadError: aiPayload?.ttsLoadError ?? null,
         device: aiPayload?.ttsDevice ?? null,
+        provider: aiPayload?.ttsProvider ?? null,
         language: aiPayload?.ttsLanguage ?? DEFAULT_DESKTOP_TTS_LANGUAGE,
         instruct: aiPayload?.ttsInstruct ?? DEFAULT_DESKTOP_TTS_INSTRUCT,
       },

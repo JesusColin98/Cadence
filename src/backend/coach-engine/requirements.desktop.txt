@@ -1,0 +1,8 @@
+# FILE: src/coach-engine/requirements.desktop.txt
+fastapi
+uvicorn[standard]
+torch==2.2.2
+accelerate==1.12.0
+sentencepiece
+transformers==4.57.6
+numpy<2.0

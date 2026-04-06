@@ -29,6 +29,10 @@ TTS_NARRATION_NUM_STEP = int(os.getenv("OMNIVOICE_NARRATION_NUM_STEP", "16"))
 TTS_NARRATION_SPEED = float(os.getenv("OMNIVOICE_NARRATION_SPEED", "0.9"))
 TTS_NARRATION_THRESHOLD = int(os.getenv("OMNIVOICE_NARRATION_THRESHOLD", "120"))
 TTS_PROVIDER = os.getenv("CADENCE_TTS_PROVIDER", "auto").strip().lower() or "auto"
+TTS_REQUIRE_MODEL = (
+    os.getenv("CADENCE_TTS_REQUIRE_MODEL", "1").strip().lower()
+    not in {"0", "false", "no", "off"}
+)
 
 logger = logging.getLogger("cadence.ai_engine.reference_tts")
 
@@ -272,6 +276,16 @@ class ReferenceSpeechSynthesizer:
         self.last_generation_seconds: float | None = None
         self._available_macos_voices: list[str] | None = None
 
+    def _model_provider_required(self) -> bool:
+        return TTS_REQUIRE_MODEL
+
+    def _is_model_provider_active(self) -> bool:
+        return (
+            self.model_loaded
+            and self.provider_label == "omnivoice"
+            and self.model is not None
+        )
+
     def _prepare_audio_output(
         self,
         audio: Any,
@@ -324,6 +338,7 @@ class ReferenceSpeechSynthesizer:
         return candidates
 
     def get_status(self) -> dict[str, Any]:
+        is_model_active = self._is_model_provider_active()
         return {
             "ttsModel": (
                 MACOS_DEFAULT_TTS_MODEL_NAME
@@ -332,11 +347,13 @@ class ReferenceSpeechSynthesizer:
             ),
             "ttsLanguage": self.language,
             "ttsInstruct": self.instruct,
-            "ttsReady": self.model_loaded,
+            "ttsReady": is_model_active if self._model_provider_required() else self.model_loaded,
             "ttsLoadError": self.load_error,
             "ttsImportError": self.import_error,
             "ttsDevice": self.device_label,
             "ttsProvider": self.provider_label,
+            "ttsFallbackActive": self.provider_label == "macos-say",
+            "ttsRequiresModelProvider": self._model_provider_required(),
             "ttsCacheEntries": len(self.cache),
             "ttsLastWarmupSeconds": self.last_warmup_seconds,
             "ttsLastGenerationSeconds": self.last_generation_seconds,
@@ -518,6 +535,16 @@ class ReferenceSpeechSynthesizer:
             return
 
         if TTS_PROVIDER in {"say", "macos", "macos-say"}:
+            if self._model_provider_required():
+                self.model_loaded = False
+                self.model = None
+                self.device_label = "unavailable"
+                self.provider_label = "misconfigured"
+                self.load_error = (
+                    "Cadence is configured to require the OmniVoice model, but the desktop runtime forced macOS Speech instead."
+                )
+                logger.error(self.load_error)
+                raise RuntimeError(self.load_error)
             self._warmup_macos_say(force=force)
             return
 
@@ -535,7 +562,11 @@ class ReferenceSpeechSynthesizer:
             import torch
             from omnivoice import OmniVoice
         except Exception as exc:
-            if TTS_PROVIDER == "auto" and self._macos_say_available():
+            if (
+                TTS_PROVIDER == "auto"
+                and self._macos_say_available()
+                and not self._model_provider_required()
+            ):
                 self.import_error = str(exc)
                 logger.warning(
                     "OmniVoice imports unavailable; falling back to macOS Speech: %s",
@@ -544,7 +575,11 @@ class ReferenceSpeechSynthesizer:
                 self._warmup_macos_say(force=force)
                 return
             self.import_error = str(exc)
-            self.load_error = str(exc)
+            self.load_error = (
+                f"OmniVoice could not be imported and system voice fallback is disabled: {exc}"
+                if self._model_provider_required()
+                else str(exc)
+            )
             logger.exception("OmniVoice warmup failed during imports")
             raise RuntimeError(self.load_error) from exc
 
@@ -582,7 +617,11 @@ class ReferenceSpeechSynthesizer:
         self.model = None
         self.device_label = "unavailable"
         self.provider_label = "omnivoice"
-        self.load_error = str(last_error) if last_error else "OmniVoice failed to load."
+        self.load_error = (
+            f"OmniVoice failed to load and system voice fallback is disabled: {last_error}"
+            if self._model_provider_required() and last_error
+            else str(last_error) if last_error else "OmniVoice failed to load."
+        )
         raise RuntimeError(self.load_error)
 
     def synthesize(self, text: str, instruct: str | None = None) -> bytes:
@@ -615,6 +654,13 @@ class ReferenceSpeechSynthesizer:
         warmup_start = time.perf_counter()
         self.warmup()
         warmup_elapsed = time.perf_counter() - warmup_start
+
+        if self._model_provider_required() and not self._is_model_provider_active():
+            raise RuntimeError(
+                self.load_error
+                or "Cadence requires the OmniVoice model for desktop reference audio, but it is not active."
+            )
+
         cache_key = (
             f"{self.provider_label}:{mode}:{self.language}:{effective_instruct}:{generation_kwargs}:{normalized_text.lower()}"
         )

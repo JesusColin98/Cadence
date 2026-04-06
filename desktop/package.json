@@ -1,6 +1,6 @@
 {
   "name": "cadence-desktop",
-  "version": "0.1.10",
+  "version": "0.1.16",
   "description": "Cadence desktop application",
   "author": "Pavel Stepanov",
   "license": "MIT",
@@ -9,11 +9,13 @@
   "scripts": {
     "prebuild": "node ./scripts/prepare-build.mjs",
     "prepare:python-runtime": "node ./scripts/prepare-python-runtime.mjs",
+    "clean:test": "node ./scripts/clean-test.mjs",
     "dev": "node ./scripts/dev.mjs",
     "dev:watch": "concurrently \"tsc -p tsconfig.json -w\" \"electron .\"",
     "compile": "tsc -p tsconfig.json",
     "build:next": "pnpm --dir .. build && node ./scripts/fix-standalone.mjs",
     "build:release": "node ./scripts/prepare-release.mjs && pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder --mac",
+    "build:clean": "pnpm clean:test && pnpm build",
     "build": "pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder",
     "build:mac": "pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder --mac",
     "build:dir": "pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder --dir",

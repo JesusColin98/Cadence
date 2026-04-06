@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PRODUCT_NAME = 'Cadence'
+const APP_ID = 'com.cadence.app'
 const COMPOSE_PROJECT_NAME = 'cadence-desktop-beta'
 
 function getUserDataDir() {
@@ -237,18 +238,33 @@ async function removeCadenceImages({ dryRun }) {
 export async function resetDesktopRuntime({
   dryRun = false,
   distDir = null,
+  extraPaths = [],
+  removeInstalledApp = false,
 } = {}) {
   const setupRoot = join(getUserDataDir(), 'desktop-runtime')
   const composeFilePath = join(setupRoot, 'runtime', 'docker-compose.ai.yml')
   const aiPidPath = join(setupRoot, 'runtime', 'ai-engine.pid')
   const coachPidPath = join(setupRoot, 'runtime', 'coach-engine.pid')
+  const installedAppPaths = [
+    '/Applications/Cadence.app',
+    join(homedir(), 'Applications', 'Cadence.app'),
+  ]
+  const deepCachePaths = [
+    join(getUserDataDir()),
+    join(homedir(), 'Library', 'Caches', PRODUCT_NAME),
+    join(homedir(), 'Library', 'Caches', APP_ID),
+    join(homedir(), 'Library', 'Preferences', `${APP_ID}.plist`),
+    join(homedir(), 'Library', 'HTTPStorages', APP_ID),
+    join(homedir(), 'Library', 'Saved Application State', `${APP_ID}.savedState`),
+    join(homedir(), 'Library', 'WebKit', APP_ID),
+  ]
 
-  if (distDir) {
+  for (const targetPath of [distDir, ...extraPaths].filter(Boolean)) {
     if (dryRun) {
-      console.log(`Dry run: remove ${distDir}`)
+      console.log(`Dry run: remove ${targetPath}`)
     } else {
-      await rm(distDir, { recursive: true, force: true })
-      console.log('Cleared desktop cache at dist')
+      await rm(targetPath, { recursive: true, force: true })
+      console.log(`Cleared ${targetPath}`)
     }
   }
 
@@ -281,11 +297,31 @@ export async function resetDesktopRuntime({
 
   if (dryRun) {
     console.log(`Dry run: remove ${setupRoot}`)
+    if (removeInstalledApp) {
+      for (const appPath of installedAppPaths) {
+        console.log(`Dry run: remove ${appPath}`)
+      }
+      for (const cachePath of deepCachePaths) {
+        console.log(`Dry run: remove ${cachePath}`)
+      }
+    }
     return
   }
 
   await rm(setupRoot, { recursive: true, force: true })
   console.log(`Reset desktop runtime at ${setupRoot}`)
+
+  if (removeInstalledApp) {
+    for (const appPath of installedAppPaths) {
+      await rm(appPath, { recursive: true, force: true })
+      console.log(`Removed installed app at ${appPath}`)
+    }
+
+    for (const cachePath of deepCachePaths) {
+      await rm(cachePath, { recursive: true, force: true })
+      console.log(`Cleared ${cachePath}`)
+    }
+  }
 }
 
 const isEntryPoint = process.argv[1] === fileURLToPath(import.meta.url)

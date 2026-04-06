@@ -318,6 +318,21 @@ export class DesktopSetupManager {
         return true
       }
 
+      if (!health.ttsReady && runtime.details.tts.loadError) {
+        await this.runtime.writeLog(
+          `Coach voice model is unavailable: ${runtime.details.tts.loadError}`,
+        )
+        this.setState({
+          ...health,
+          phase: 'error',
+          currentStep: 'Cadence could not activate the local coach voice model.',
+          percent: 0,
+          error: runtime.details.tts.loadError,
+          runtimeDetails: runtime.details,
+        })
+        return false
+      }
+
       const runtimeFailure = await this.runtime.inspectRuntimeFailure()
       if (runtimeFailure) {
         this.setState({
