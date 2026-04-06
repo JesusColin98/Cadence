@@ -60,11 +60,11 @@ function DesktopAuthShell({ children }: { children: ReactNode }) {
 
 function WebAuthShell({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen bg-[#efe4c8] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center sm:min-h-[calc(100vh-3rem)]">
+    <main className="h-screen overflow-hidden bg-[#efe4c8] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+      <div className="mx-auto flex h-full max-w-6xl items-center justify-center">
         <div className="grid w-full items-center gap-4 lg:grid-cols-[1.02fr_0.98fr] xl:gap-5">
-          <section className="hidden min-h-0 rounded-[2.75rem] bg-hunter-green text-bright-snow shadow-[0_30px_110px_rgba(41,66,45,0.16)] lg:block">
-            <div className="flex h-full min-h-[22rem] flex-col justify-between gap-8 px-7 py-8 sm:px-10 sm:py-10 lg:min-h-[calc(100vh-2rem)] lg:px-12 lg:py-12">
+          <section className="hidden min-h-0 rounded-[2.75rem] bg-hunter-green text-bright-snow lg:block">
+            <div className="flex h-full min-h-[22rem] flex-col justify-between gap-8 px-7 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12">
               <div className="max-w-xl space-y-5">
                 <p className="eyebrow text-sm text-yellow-green">
                   Cadence account

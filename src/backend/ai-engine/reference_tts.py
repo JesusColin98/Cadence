@@ -5,6 +5,10 @@ import io
 import logging
 import os
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 import time
 from typing import Any
 
@@ -24,6 +28,7 @@ TTS_WORD_MAX_WORDS = int(os.getenv("OMNIVOICE_WORD_MAX_WORDS", "2"))
 TTS_NARRATION_NUM_STEP = int(os.getenv("OMNIVOICE_NARRATION_NUM_STEP", "16"))
 TTS_NARRATION_SPEED = float(os.getenv("OMNIVOICE_NARRATION_SPEED", "0.9"))
 TTS_NARRATION_THRESHOLD = int(os.getenv("OMNIVOICE_NARRATION_THRESHOLD", "120"))
+TTS_PROVIDER = os.getenv("CADENCE_TTS_PROVIDER", "auto").strip().lower() or "auto"
 
 logger = logging.getLogger("cadence.ai_engine.reference_tts")
 
@@ -115,6 +120,55 @@ INSTRUCT_NORMALIZATION_MAP = {
     "neutral": None,
     "clear": None,
     "professional": None,
+}
+
+MACOS_DEFAULT_TTS_MODEL_NAME = "macOS Speech"
+MACOS_SAY_RATE_WORD = 155
+MACOS_SAY_RATE_NARRATION = 175
+
+MACOS_VOICE_PROFILES = {
+    "american-default": [
+        "Eddy (English (US))",
+        "Flo (English (US))",
+        "Samantha",
+        "Alex",
+    ],
+    "american-male": [
+        "Eddy (English (US))",
+        "Alex",
+        "Albert",
+    ],
+    "american-female": [
+        "Flo (English (US))",
+        "Samantha",
+    ],
+    "british-default": [
+        "Daniel",
+        "Serena",
+        "Eddy (English (UK))",
+        "Flo (English (UK))",
+    ],
+    "british-male": [
+        "Daniel",
+        "Eddy (English (UK))",
+    ],
+    "british-female": [
+        "Serena",
+        "Flo (English (UK))",
+    ],
+    "australian-default": [
+        "Karen",
+    ],
+    "indian-default": [
+        "Veena",
+    ],
+    "fallback": [
+        "Eddy (English (US))",
+        "Flo (English (US))",
+        "Samantha",
+        "Alex",
+        "Daniel",
+    ],
 }
 
 
@@ -212,9 +266,11 @@ class ReferenceSpeechSynthesizer:
         self.model: Any | None = None
         self.cache: dict[str, bytes] = {}
         self.device_label = "uninitialized"
+        self.provider_label = "uninitialized"
         self.import_error: str | None = None
         self.last_warmup_seconds: float | None = None
         self.last_generation_seconds: float | None = None
+        self._available_macos_voices: list[str] | None = None
 
     def _prepare_audio_output(
         self,
@@ -269,13 +325,18 @@ class ReferenceSpeechSynthesizer:
 
     def get_status(self) -> dict[str, Any]:
         return {
-            "ttsModel": self.model_name,
+            "ttsModel": (
+                MACOS_DEFAULT_TTS_MODEL_NAME
+                if self.provider_label == "macos-say"
+                else self.model_name
+            ),
             "ttsLanguage": self.language,
             "ttsInstruct": self.instruct,
             "ttsReady": self.model_loaded,
             "ttsLoadError": self.load_error,
             "ttsImportError": self.import_error,
             "ttsDevice": self.device_label,
+            "ttsProvider": self.provider_label,
             "ttsCacheEntries": len(self.cache),
             "ttsLastWarmupSeconds": self.last_warmup_seconds,
             "ttsLastGenerationSeconds": self.last_generation_seconds,
@@ -307,8 +368,157 @@ class ReferenceSpeechSynthesizer:
         options.append(("cpu", {"device_map": "cpu", "dtype": torch.float32}))
         return options
 
+    def _macos_say_available(self) -> bool:
+        return shutil.which("say") is not None and os.name == "posix" and sys.platform == "darwin"
+
+    def _warmup_macos_say(self, force: bool = False) -> None:
+        if self.model_loaded and self.provider_label == "macos-say" and not force:
+            return
+
+        if not self._macos_say_available():
+            self.model_loaded = False
+            self.model = None
+            self.device_label = "unavailable"
+            self.provider_label = "unavailable"
+            self.load_error = "macOS Speech is unavailable on this machine."
+            raise RuntimeError(self.load_error)
+
+        self.model_loaded = True
+        self.model = None
+        self.load_error = None
+        self.import_error = None
+        self.device_label = "system"
+        self.provider_label = "macos-say"
+        self.last_warmup_seconds = 0.0
+        logger.info("macOS Speech warmup complete")
+
+    def _list_available_macos_voices(self) -> list[str]:
+        if self._available_macos_voices is not None:
+            return self._available_macos_voices
+
+        try:
+            result = subprocess.run(
+                ["say", "-v", "?"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            logger.exception("Could not enumerate macOS speech voices")
+            self._available_macos_voices = []
+            return self._available_macos_voices
+
+        voices: list[str] = []
+        for line in result.stdout.splitlines():
+            match = re.match(r"^(.*?)\s{2,}[A-Za-z_]+(?:\s+#.*)?$", line.strip())
+            if not match:
+                continue
+
+            voice_name = match.group(1).strip()
+            if voice_name:
+                voices.append(voice_name)
+
+        self._available_macos_voices = voices
+        return voices
+
+    def _select_macos_voice(self, instruct: str) -> str:
+        available = set(self._list_available_macos_voices())
+        tokens = {
+            token.strip()
+            for token in sanitize_instruct_text(instruct).split(",")
+            if token.strip()
+        }
+
+        accent = "american-default"
+        if "british accent" in tokens:
+            accent = "british-default"
+        elif "australian accent" in tokens:
+            accent = "australian-default"
+        elif "indian accent" in tokens:
+            accent = "indian-default"
+
+        profile_candidates: list[str] = []
+        if "male" in tokens:
+            profile_candidates.append(accent.replace("-default", "-male"))
+        elif "female" in tokens:
+            profile_candidates.append(accent.replace("-default", "-female"))
+
+        profile_candidates.append(accent)
+        profile_candidates.append("fallback")
+
+        for profile_name in profile_candidates:
+            for voice in MACOS_VOICE_PROFILES.get(profile_name, []):
+                if voice in available:
+                    return voice
+
+        if available:
+            for preferred in ("Eddy (English (US))", "Flo (English (US))", "Samantha"):
+                if preferred in available:
+                    return preferred
+            return sorted(available)[0]
+
+        raise RuntimeError("macOS Speech could not find an available system voice.")
+
+    def _synthesize_with_macos_say(
+        self,
+        text: str,
+        mode: str,
+        instruct: str,
+    ) -> bytes:
+        voice = self._select_macos_voice(instruct)
+        rate = MACOS_SAY_RATE_WORD if mode == "word" else MACOS_SAY_RATE_NARRATION
+
+        with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as temp_file:
+            output_path = temp_file.name
+
+        try:
+            result = subprocess.run(
+                ["say", "-v", voice, "-r", str(rate), "-o", output_path, text],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or "macOS Speech could not generate reference audio."
+                )
+
+            audio_array, sample_rate = sf.read(output_path, dtype="float32")
+            audio_array, diagnostics = self._prepare_audio_output(audio_array)
+
+            buffer = io.BytesIO()
+            sf.write(
+                buffer,
+                audio_array,
+                int(sample_rate) if sample_rate else 22050,
+                format="WAV",
+                subtype="PCM_16",
+            )
+            audio_bytes = buffer.getvalue()
+            logger.info(
+                "macOS Speech generated reference audio voice=%s rate=%s bytes=%s diagnostics=%s",
+                voice,
+                rate,
+                len(audio_bytes),
+                diagnostics,
+            )
+            return audio_bytes
+        finally:
+            try:
+                os.unlink(output_path)
+            except FileNotFoundError:
+                pass
+
     def warmup(self, force: bool = False) -> None:
-        if self.model_loaded and self.model is not None and not force:
+        if self.model_loaded and (
+            self.model is not None or self.provider_label == "macos-say"
+        ) and not force:
+            return
+
+        if TTS_PROVIDER in {"say", "macos", "macos-say"}:
+            self._warmup_macos_say(force=force)
             return
 
         logger.info(
@@ -325,6 +535,14 @@ class ReferenceSpeechSynthesizer:
             import torch
             from omnivoice import OmniVoice
         except Exception as exc:
+            if TTS_PROVIDER == "auto" and self._macos_say_available():
+                self.import_error = str(exc)
+                logger.warning(
+                    "OmniVoice imports unavailable; falling back to macOS Speech: %s",
+                    exc,
+                )
+                self._warmup_macos_say(force=force)
+                return
             self.import_error = str(exc)
             self.load_error = str(exc)
             logger.exception("OmniVoice warmup failed during imports")
@@ -345,6 +563,7 @@ class ReferenceSpeechSynthesizer:
                 self.model_loaded = True
                 self.load_error = None
                 self.device_label = device_label
+                self.provider_label = "omnivoice"
                 self.last_warmup_seconds = round(time.perf_counter() - start_time, 2)
                 logger.info(
                     "OmniVoice warmup complete device=%s elapsed=%.2fs",
@@ -362,6 +581,7 @@ class ReferenceSpeechSynthesizer:
         self.model_loaded = False
         self.model = None
         self.device_label = "unavailable"
+        self.provider_label = "omnivoice"
         self.load_error = str(last_error) if last_error else "OmniVoice failed to load."
         raise RuntimeError(self.load_error)
 
@@ -392,8 +612,11 @@ class ReferenceSpeechSynthesizer:
                 "speed": TTS_NARRATION_SPEED,
             }
 
+        warmup_start = time.perf_counter()
+        self.warmup()
+        warmup_elapsed = time.perf_counter() - warmup_start
         cache_key = (
-            f"{mode}:{self.language}:{effective_instruct}:{generation_kwargs}:{normalized_text.lower()}"
+            f"{self.provider_label}:{mode}:{self.language}:{effective_instruct}:{generation_kwargs}:{normalized_text.lower()}"
         )
         if cache_key in self.cache:
             logger.info(
@@ -406,9 +629,20 @@ class ReferenceSpeechSynthesizer:
             )
             return self.cache[cache_key]
 
-        warmup_start = time.perf_counter()
-        self.warmup()
-        warmup_elapsed = time.perf_counter() - warmup_start
+        if self.provider_label == "macos-say":
+            generation_start = time.perf_counter()
+            audio_bytes = self._synthesize_with_macos_say(
+                normalized_text,
+                mode,
+                effective_instruct,
+            )
+            self.cache[cache_key] = audio_bytes
+            self.last_generation_seconds = round(
+                time.perf_counter() - generation_start,
+                2,
+            )
+            return audio_bytes
+
         if self.model is None:
             raise RuntimeError(self.load_error or "OmniVoice is not ready.")
 

@@ -669,6 +669,15 @@ export class DesktopSetupSupport {
     return join(this.runtimeDir, `${serviceName}.install.json`)
   }
 
+  private resolveRequirementsPath(serviceDir: string): string {
+    const desktopRequirementsPath = join(serviceDir, 'requirements.desktop.txt')
+    if (existsSync(desktopRequirementsPath)) {
+      return desktopRequirementsPath
+    }
+
+    return join(serviceDir, 'requirements.txt')
+  }
+
   private createServiceEnv(serviceName: ServiceName): NodeJS.ProcessEnv {
     const threadCount = String(this.getHostCpuCount())
     const shared = {
@@ -692,6 +701,7 @@ export class DesktopSetupSupport {
         ...shared,
         AI_ENGINE_HOST: '127.0.0.1',
         AI_ENGINE_PORT: '8000',
+        CADENCE_TTS_PROVIDER: 'say',
       }
     }
 
@@ -724,7 +734,8 @@ export class DesktopSetupSupport {
   }): Promise<void> {
     const venvDir = this.getServiceVenvDir(serviceName)
     const pythonPath = this.getServiceVenvPythonPath(serviceName)
-    const requirementsPath = join(serviceDir, 'requirements.txt')
+    const requirementsPath = this.resolveRequirementsPath(serviceDir)
+    const requirementsFile = requirementsPath.split('/').at(-1) ?? 'requirements.txt'
     const installMarkerPath = this.getInstallMarkerPath(serviceName)
     const requirementsHash = createHash('sha256')
       .update(await readFile(requirementsPath, 'utf8'))
@@ -759,7 +770,9 @@ export class DesktopSetupSupport {
     }
 
     onStatus?.(installMessage, installPercent)
-    await this.writeLog(`Installing local dependencies for ${serviceName}`)
+    await this.writeLog(
+      `Installing local dependencies for ${serviceName} using ${requirementsFile}`,
+    )
 
     const upgradePip = await this.runCommand(
       pythonPath,
@@ -783,7 +796,7 @@ export class DesktopSetupSupport {
 
     const installRequirements = await this.runCommand(
       pythonPath,
-      ['-m', 'pip', 'install', '-r', 'requirements.txt'],
+      ['-m', 'pip', 'install', '-r', requirementsFile],
       {
         allowFailure: true,
         cwd: serviceDir,
