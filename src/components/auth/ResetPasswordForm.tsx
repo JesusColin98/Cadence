@@ -88,7 +88,7 @@ export function ResetPasswordForm({ runtime }: { runtime: AppRuntime }) {
       <Card className="w-full max-w-[30rem] bg-transparent p-0 backdrop-blur-0">
         <div className="space-y-6">
           <div className="space-y-4 px-5 sm:px-6">
-            <div className="inline-flex w-fit items-center">
+            <Link href="/" className="inline-flex w-fit items-center" aria-label="Go to home">
               <Image
                 src="/logo/logo-green-white.svg"
                 alt="Cadence logo"
@@ -97,7 +97,7 @@ export function ResetPasswordForm({ runtime }: { runtime: AppRuntime }) {
                 className="h-[30px] w-auto object-contain"
                 priority
               />
-            </div>
+            </Link>
 
             <div className="space-y-3">
               <CardTitle className="text-[2rem] leading-tight sm:text-[2.15rem]">

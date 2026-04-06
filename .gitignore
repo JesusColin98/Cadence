@@ -41,7 +41,6 @@ yarn-error.log*
 .vscode/
 CLAUDE.md
 GEMINI.md
-Icon
 
 # python
 __pycache__/

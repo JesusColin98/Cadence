@@ -1,6 +1,6 @@
-import { rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { resetDesktopRuntime } from './reset-runtime.mjs'
 
 const desktopDir = fileURLToPath(new URL('..', import.meta.url))
 const tscCli = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url))
@@ -13,8 +13,10 @@ const shouldDryRun = rawArgs.includes('--dry-run')
 const forwardedArgs = rawArgs.filter((arg) => arg !== '--clear' && arg !== '--dry-run')
 
 if (shouldClear) {
-  await rm(distDir, { recursive: true, force: true })
-  console.log('Cleared desktop cache at dist')
+  await resetDesktopRuntime({
+    dryRun: shouldDryRun,
+    distDir,
+  })
 }
 
 if (shouldDryRun) {

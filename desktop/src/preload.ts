@@ -1,17 +1,26 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// Mark the document as running inside Electron before first paint.
-// This lets CSS target `.electron` for desktop-only styles (e.g. custom scrollbars)
-// without waiting for React hydration.
-document.documentElement.classList.add('electron')
+function markElectronDocument() {
+  if (document.documentElement) {
+    document.documentElement.classList.add('electron')
+    return
+  }
+
+  window.addEventListener(
+    'DOMContentLoaded',
+    () => {
+      document.documentElement?.classList.add('electron')
+    },
+    { once: true },
+  )
+}
 
 // Expose a minimal, safe API to the renderer (the Next.js app).
 // Do NOT expose ipcRenderer directly — only wrap specific channels you need.
 contextBridge.exposeInMainWorld('electron', {
   isElectron: true,
   platform: process.platform,
-  // Add IPC wrappers here as the app grows, e.g.:
-  // openFile: () => ipcRenderer.invoke('dialog:openFile'),
+  openDevTools: () => ipcRenderer.invoke('desktop:open-devtools'),
 })
 
 contextBridge.exposeInMainWorld('cadenceDesktopSetup', {
@@ -29,4 +38,5 @@ contextBridge.exposeInMainWorld('cadenceDesktopSetup', {
   },
 })
 
+markElectronDocument()
 window.dispatchEvent(new Event('cadence-electron-ready'))

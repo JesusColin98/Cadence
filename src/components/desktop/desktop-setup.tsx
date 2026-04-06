@@ -9,9 +9,9 @@ import { useIsElectron } from '@/hooks/use-is-electron'
 import { cn } from '@/lib/utils'
 
 const INITIAL_STATE: DesktopSetupState = {
-  phase: 'checking',
-  currentStep: 'Checking what is already ready.',
-  percent: 5,
+  phase: 'idle',
+  currentStep: 'Setup has not started yet. Click Start setup to begin.',
+  percent: 0,
   aiEngineReady: false,
   coachEngineReady: false,
   transcriberReady: false,
@@ -51,20 +51,61 @@ export function DesktopSetup() {
   const [state, setState] = useState<DesktopSetupState>(INITIAL_STATE)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  async function waitForDesktopSetupBridge(timeoutMs = 2500) {
+    if (typeof window === 'undefined') {
+      return null
+    }
+
+    if (window.cadenceDesktopSetup) {
+      return window.cadenceDesktopSetup
+    }
+
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < timeoutMs) {
+      await new Promise((resolve) => window.setTimeout(resolve, 100))
+      if (window.cadenceDesktopSetup) {
+        return window.cadenceDesktopSetup
+      }
+    }
+
+    return null
+  }
 
   useEffect(() => {
-    if (!isElectron || !window.cadenceDesktopSetup) {
+    if (!isElectron) {
       setIsLoading(false)
       return
     }
 
     let active = true
+    let unsubscribe = () => {}
+    const loadingFallback = window.setTimeout(() => {
+      if (!active) {
+        return
+      }
+
+      setIsLoading(false)
+      setState((current) =>
+        current.phase === 'idle' || current.phase === 'checking'
+          ? {
+              ...current,
+              phase: 'idle',
+              currentStep: 'Setup has not started yet. Click Start setup to begin.',
+              percent: 0,
+            }
+          : current,
+      )
+    }, 1800)
 
     const applyState = (nextState: DesktopSetupState | null) => {
       if (!active || !nextState) {
         return
       }
 
+      console.info('[desktop-setup] state update', nextState)
+      setLocalError(null)
       setState(nextState)
 
       if (nextState.phase === 'ready') {
@@ -74,39 +115,83 @@ export function DesktopSetup() {
       }
     }
 
-    window.cadenceDesktopSetup
-      .getState()
-      .then((nextState) => {
+    void waitForDesktopSetupBridge().then((desktopSetup) => {
+      if (!active) {
+        return
+      }
+
+      if (!desktopSetup) {
+        console.warn('[desktop-setup] bridge not available after waiting')
+        setLocalError(
+          'Cadence Desktop is still connecting to the local setup tools. Try View details in a moment if you need the console.',
+        )
+        setIsLoading(false)
+        return
+      }
+
+      unsubscribe = desktopSetup.onProgress((nextState) => {
         applyState(nextState)
       })
-      .finally(() => {
-        if (active) {
-          setIsLoading(false)
-        }
-      })
 
-    const unsubscribe = window.cadenceDesktopSetup.onProgress((nextState) => {
-      applyState(nextState)
+      void desktopSetup
+        .getState()
+        .then((nextState) => {
+          applyState(nextState)
+        })
+        .catch((error: unknown) => {
+          console.error('[desktop-setup] failed to read initial state', error)
+          setLocalError(
+            error instanceof Error
+              ? error.message
+              : 'Cadence could not read the desktop setup state.',
+          )
+        })
+        .finally(() => {
+          if (active) {
+            window.clearTimeout(loadingFallback)
+            setIsLoading(false)
+          }
+        })
     })
 
     return () => {
       active = false
+      window.clearTimeout(loadingFallback)
       unsubscribe()
     }
   }, [isElectron, router])
 
-  const progressWidth = `${Math.max(state.percent, 6)}%`
+  const progressWidth =
+    state.percent > 0 ? `${Math.max(state.percent, 6)}%` : '0%'
   const primaryLabel =
     state.phase === 'ready'
       ? 'Open Cadence'
       : state.phase === 'error'
         ? 'Retry setup'
-        : 'Set up Cadence'
+        : state.phase === 'idle'
+          ? 'Start setup'
+          : 'Setup in progress'
+  const isBusy =
+    state.phase === 'checking' ||
+    state.phase === 'installing' ||
+    state.phase === 'starting-services' ||
+    state.phase === 'verifying'
 
   async function handlePrimaryAction() {
-    if (!window.cadenceDesktopSetup) {
+    console.info('[desktop-setup] primary action clicked', {
+      phase: state.phase,
+      isElectron,
+    })
+
+    const desktopSetup = await waitForDesktopSetupBridge()
+    if (!desktopSetup) {
+      setLocalError(
+        'Cadence Desktop is still connecting to the local setup tools. Give it a moment, then try Start setup again.',
+      )
       return
     }
+
+    setLocalError(null)
 
     if (state.phase === 'ready') {
       startTransition(() => {
@@ -115,101 +200,167 @@ export function DesktopSetup() {
       return
     }
 
+    setState((current) =>
+      current.phase === 'idle' || current.phase === 'error'
+        ? {
+            ...current,
+            phase: 'checking',
+            currentStep: 'Starting setup on this Mac.',
+            percent: 10,
+          }
+        : current,
+    )
     setIsSubmitting(true)
 
     try {
       if (state.phase === 'error') {
-        await window.cadenceDesktopSetup.retry()
+        await desktopSetup.retry()
       } else {
-        await window.cadenceDesktopSetup.install()
+        await desktopSetup.install()
       }
+    } catch (error) {
+      console.error('[desktop-setup] failed to start setup', error)
+      setLocalError(
+        error instanceof Error
+          ? error.message
+          : 'Cadence could not start setup just yet.',
+      )
     } finally {
       setIsSubmitting(false)
     }
   }
 
   async function handleOpenLogs() {
-    await window.cadenceDesktopSetup?.openLogs()
+    console.info('[desktop-setup] view details clicked')
+    const desktopSetup = await waitForDesktopSetupBridge()
+    if (!desktopSetup) {
+      if (window.electron?.openDevTools) {
+        await window.electron.openDevTools()
+        setLocalError(
+          'Cadence opened the desktop console. The setup bridge is still connecting, so the log file is not ready yet.',
+        )
+        return
+      }
+
+      setLocalError(
+        'Cadence Desktop is still connecting to the local setup tools. Give it a moment, then try View details again.',
+      )
+      return
+    }
+
+    setLocalError(null)
+    try {
+      await desktopSetup.openLogs()
+    } catch (error) {
+      console.error('[desktop-setup] failed to open details', error)
+      setLocalError(
+        error instanceof Error
+          ? error.message
+          : 'Cadence could not open the setup details.',
+      )
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(167,201,87,0.3),_transparent_35%),linear-gradient(180deg,_#f2e8cf_0%,_#ece1c3_100%)] px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl items-center justify-center">
-        <section className="grid w-full max-w-5xl gap-4 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
-          <Card className="bg-hunter-green text-bright-snow">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-yellow-green">
-                <Microphone size={18} filled color="currentColor" />
-                <span className="eyebrow text-sm">Desktop Setup</span>
-              </div>
+    <div
+      className={cn(
+        'bg-[radial-gradient(circle_at_top_left,_rgba(167,201,87,0.3),_transparent_35%),linear-gradient(180deg,_#f2e8cf_0%,_#ece1c3_100%)] px-4 py-4 sm:px-6 sm:py-5 lg:px-8',
+        isElectron ? 'h-[100dvh] overflow-hidden' : 'min-h-screen',
+      )}
+    >
+      <div
+        className={cn(
+          'mx-auto flex w-full max-w-6xl items-center justify-center',
+          isElectron ? 'h-full' : 'min-h-[calc(100vh-2.5rem)]',
+        )}
+      >
+        <section className="grid w-full max-w-5xl gap-4 lg:grid-cols-[1.08fr_0.92fr] lg:items-stretch">
+          <Card className="h-full bg-hunter-green text-bright-snow">
+            <div className="flex h-full flex-col justify-between gap-5">
+              <div className="space-y-5">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-yellow-green">
+                  <Microphone size={18} filled color="currentColor" />
+                  <span className="eyebrow text-sm">Desktop Setup</span>
+                </div>
 
-              <div className="space-y-3">
-                <h1 className="text-4xl font-semibold text-bright-snow sm:text-5xl">
-                  Getting Cadence ready for your first session.
-                </h1>
-                <p className="max-w-2xl text-base leading-7 text-bright-snow/80">
-                  Cadence is preparing the speaking tools it needs so practice,
-                  listening, and coach responses all work smoothly. The first
-                  setup can take a few minutes.
-                </p>
-              </div>
+                <div className="space-y-3">
+                  <h1 className="text-4xl font-semibold text-bright-snow sm:text-5xl">
+                    Getting Cadence ready for your first session.
+                  </h1>
+                  <p className="max-w-2xl text-base leading-7 text-bright-snow/80">
+                    Cadence will prepare the local speaking tools this Mac needs
+                    for practice, listening, and coach responses. The first
+                    setup can take a few minutes once you start it.
+                  </p>
+                </div>
 
-              <div className="rounded-3xl bg-white/10 px-5 py-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="eyebrow text-sm text-yellow-green/80">Current step</p>
-                    <p className="mt-2 text-lg font-semibold text-bright-snow">
-                      {isLoading ? 'Loading installer state…' : state.currentStep}
-                    </p>
+                <div className="rounded-3xl bg-white/10 px-5 py-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="eyebrow text-sm text-yellow-green/80">Current step</p>
+                      <p className="mt-2 text-lg font-semibold text-bright-snow">
+                        {isLoading ? 'Loading installer state…' : state.currentStep}
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-white/12 px-4 py-3 text-sm font-semibold text-bright-snow">
+                      {state.percent}%
+                    </div>
                   </div>
-                  <div className="rounded-full bg-white/12 px-4 py-3 text-sm font-semibold text-bright-snow">
-                    {state.percent}%
+
+                  <div className="mt-5 rounded-full bg-white/12 p-2">
+                    <div
+                      className="h-4 rounded-full bg-yellow-green transition-[width] duration-500"
+                      style={{ width: progressWidth }}
+                    />
                   </div>
                 </div>
-
-                <div className="mt-5 rounded-full bg-white/12 p-2">
-                  <div
-                    className="h-4 rounded-full bg-yellow-green transition-[width] duration-500"
-                    style={{ width: progressWidth }}
-                  />
-                </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => void handlePrimaryAction()}
-                  disabled={isLoading || isSubmitting || !isElectron}
-                >
-                  {primaryLabel}
-                  <ArrowRight size={16} color="currentColor" />
-                </Button>
+              <div className="space-y-4">
+                {state.phase === 'idle' ? (
+                  <div className="rounded-3xl bg-white/10 px-4 py-4 text-sm leading-7 text-bright-snow/80">
+                    Nothing is running yet. Click <span className="font-semibold text-bright-snow">Start setup</span> and
+                    Cadence will begin preparing the local speaking tools for
+                    this Mac.
+                  </div>
+                ) : null}
 
-                <Button
-                  variant="ghost"
-                  className="bg-white/12 text-bright-snow hover:bg-white/18"
-                  onClick={() => void handleOpenLogs()}
-                  disabled={!isElectron}
-                >
-                  View details
-                </Button>
-              </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => void handlePrimaryAction()}
+                    disabled={isSubmitting || isBusy}
+                  >
+                    {primaryLabel}
+                    <ArrowRight size={16} color="currentColor" />
+                  </Button>
 
-              {state.error ? (
-                <div className="rounded-3xl bg-blushed-brick px-4 py-3 text-sm text-bright-snow">
-                  {state.error}
+                  <Button
+                    variant="ghost"
+                    className="bg-white/12 text-bright-snow hover:bg-white/18"
+                    onClick={() => void handleOpenLogs()}
+                    disabled={isSubmitting}
+                  >
+                    View details
+                  </Button>
                 </div>
-              ) : null}
+
+                {state.error || localError ? (
+                  <div className="rounded-3xl bg-blushed-brick px-4 py-3 text-sm text-bright-snow">
+                    {state.error ?? localError}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </Card>
 
-          <Card className="bg-white">
-            <div className="space-y-6">
+          <Card className="h-full bg-white">
+            <div className="flex h-full flex-col gap-6">
+              <div className="inline-flex items-center gap-2 rounded-full bg-sage-green/15 px-4 py-2 text-sage-green">
+                <Activity size={18} filled color="currentColor" />
+                <span className="eyebrow text-sm">Runtime Health</span>
+              </div>
               <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full bg-sage-green/15 px-4 py-2 text-sage-green">
-                  <Activity size={18} filled color="currentColor" />
-                  <span className="eyebrow text-sm">Runtime Health</span>
-                </div>
                 <CardTitle>What Cadence is preparing on this machine</CardTitle>
                 <CardDescription>
                   The first launch can take a little while because Cadence is
@@ -225,15 +376,15 @@ export function DesktopSetup() {
                 <StatusPill label="Coach replies" ready={state.coachEngineReady} />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="mt-auto grid gap-3 sm:grid-cols-2">
                 <div className="rounded-3xl bg-vanilla-cream px-5 py-5">
                   <p className="eyebrow text-sm text-sage-green">Setup style</p>
                   <p className="mt-3 text-2xl font-semibold text-hunter-green">
                     Automatic setup
                   </p>
                   <p className="mt-2 text-sm leading-7 text-iron-grey">
-                    Cadence handles the background preparation and opens the app
-                    as soon as everything is ready.
+                    Cadence prepares the local speech tools on this Mac and
+                    opens the app as soon as everything is ready.
                   </p>
                 </div>
 
@@ -248,13 +399,6 @@ export function DesktopSetup() {
                   </p>
                 </div>
               </div>
-
-              {!isElectron ? (
-                <div className="rounded-3xl bg-vanilla-cream px-5 py-5 text-sm leading-7 text-iron-grey">
-                  This page is meant for the desktop app. Open Cadence Desktop
-                  to run the setup flow.
-                </div>
-              ) : null}
             </div>
           </Card>
         </section>

@@ -2,6 +2,8 @@
 
 import type { SavedAiCoachSession } from "@/lib/ai-coach";
 
+export const AI_COACH_SESSIONS_CHANGED_EVENT = "cadence-ai-coach-sessions-changed";
+
 export function getAiCoachStorageKey(userId: string) {
   return `cadence_ai_coach_sessions:${userId}`;
 }
@@ -70,6 +72,11 @@ export function writeSavedAiCoachSessions(
     window.localStorage.setItem(
       getAiCoachStorageKey(userId),
       JSON.stringify(sessions),
+    );
+    window.dispatchEvent(
+      new CustomEvent(AI_COACH_SESSIONS_CHANGED_EVENT, {
+        detail: { userId },
+      }),
     );
   } catch {
     // ignore

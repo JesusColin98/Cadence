@@ -275,10 +275,10 @@ export function ProfileDesktopRuntime() {
               <Microphone size={18} filled color="currentColor" />
               <span className="eyebrow text-sm">Desktop runtime</span>
             </div>
-            <CardTitle>Everything Cadence is running on this Mac</CardTitle>
+            <CardTitle>Cadence on this Mac</CardTitle>
             <CardDescription>
-              This section shows the live desktop setup, the local model stack,
-              and where Cadence is storing its runtime files.
+              Check whether desktop setup is finished, which local speech tools
+              are ready, and where Cadence keeps its support files.
             </CardDescription>
           </div>
 
@@ -287,7 +287,7 @@ export function ProfileDesktopRuntime() {
             onClick={() => void window.cadenceDesktopSetup?.openLogs()}
             disabled={!hasDesktopBridge}
           >
-            Open setup log
+            View setup details
           </Button>
         </div>
 

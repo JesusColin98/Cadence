@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Settings } from 'griddy-icons'
+import { AiCoachSidebarHistory } from '@/components/coach/AiCoachSidebarHistory'
 import { BrandMark } from '@/components/ui/brand-mark'
 import { cn } from '@/lib/utils'
 
@@ -13,14 +14,14 @@ const navItems = [
   { href: '/coach',        label: 'AI Coach'     },
 ]
 
-export function DesktopSidebar() {
+export function DesktopSidebar({ userId }: { userId?: string | null }) {
   const pathname = usePathname()
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/')
 
   return (
-    <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-alabaster-grey bg-white text-hunter-green">
+    <aside className="flex h-screen w-80 shrink-0 flex-col overflow-hidden bg-white text-hunter-green">
 
       {/* ── Traffic-light zone ── */}
       <div className="h-[52px] shrink-0 w-full px-3 pt-2">
@@ -31,34 +32,40 @@ export function DesktopSidebar() {
       </div>
 
       {/* ── Logo ── */}
-      <div className="px-4 pb-5">
+      <div className="px-5 pb-5">
         <BrandMark />
       </div>
 
       {/* ── Nav items ── */}
-      <nav className="flex flex-1 flex-col gap-0.5 px-4">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-              isActive(item.href)
-                ? 'bg-yellow-green text-hunter-green'
-                : 'text-hunter-green hover:bg-vanilla-cream',
-            )}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      <div className="flex min-h-0 flex-1 flex-col px-5">
+        <nav className="flex flex-col gap-0.5">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center rounded-full px-4 py-2.5 text-base font-semibold transition-colors',
+                isActive(item.href)
+                  ? 'bg-yellow-green text-hunter-green'
+                  : 'text-hunter-green hover:bg-vanilla-cream',
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-5">
+          {userId ? <AiCoachSidebarHistory userId={userId} /> : null}
+        </div>
+      </div>
 
       {/* ── Settings ── */}
-      <div className="px-4 pb-5">
+      <div className="px-5 pb-5">
         <Link
           href="/profile"
           className={cn(
-            'flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors',
+            'flex items-center gap-2.5 rounded-full px-4 py-2.5 text-base font-semibold transition-colors',
             isActive('/profile')
               ? 'bg-yellow-green text-hunter-green'
               : 'text-hunter-green hover:bg-vanilla-cream',
