@@ -19,7 +19,7 @@ const INITIAL_STATE: DesktopSetupState = {
   modelsReady: false,
   error: null,
   logsPath: null,
-  installStrategy: 'docker-beta',
+  installStrategy: 'native-sidecar-beta',
   isPackaged: false,
   runtimeDetails: null,
 }
@@ -380,11 +380,12 @@ export function DesktopSetup() {
                 <div className="rounded-3xl bg-vanilla-cream px-5 py-5">
                   <p className="eyebrow text-sm text-sage-green">Setup style</p>
                   <p className="mt-3 text-2xl font-semibold text-hunter-green">
-                    Automatic setup
+                    Native local setup
                   </p>
                   <p className="mt-2 text-sm leading-7 text-iron-grey">
-                    Cadence prepares the local speech tools on this Mac and
-                    opens the app as soon as everything is ready.
+                    Cadence includes its own local runtime in the desktop app,
+                    prepares the speech tools on this Mac, and opens the app as
+                    soon as everything is ready.
                   </p>
                 </div>
 

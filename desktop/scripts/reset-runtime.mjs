@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { rm, stat } from 'node:fs/promises'
+import { readFile, rm, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -240,6 +240,8 @@ export async function resetDesktopRuntime({
 } = {}) {
   const setupRoot = join(getUserDataDir(), 'desktop-runtime')
   const composeFilePath = join(setupRoot, 'runtime', 'docker-compose.ai.yml')
+  const aiPidPath = join(setupRoot, 'runtime', 'ai-engine.pid')
+  const coachPidPath = join(setupRoot, 'runtime', 'coach-engine.pid')
 
   if (distDir) {
     if (dryRun) {
@@ -247,6 +249,30 @@ export async function resetDesktopRuntime({
     } else {
       await rm(distDir, { recursive: true, force: true })
       console.log('Cleared desktop cache at dist')
+    }
+  }
+
+  for (const pidPath of [aiPidPath, coachPidPath]) {
+    if (!(await pathExists(pidPath))) {
+      continue
+    }
+
+    const pidRaw = await readFile(pidPath, 'utf8').catch(() => '')
+    const pid = Number(pidRaw.trim())
+    if (!Number.isFinite(pid) || pid <= 0) {
+      continue
+    }
+
+    if (dryRun) {
+      console.log(`Dry run: kill ${pid}`)
+      continue
+    }
+
+    try {
+      process.kill(pid, 'SIGTERM')
+      console.log(`Stopped native desktop runtime process ${pid}`)
+    } catch {
+      // Ignore stale pid files.
     }
   }
 

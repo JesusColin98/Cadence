@@ -1,6 +1,7 @@
 import { app, shell } from 'electron'
-import { spawn } from 'child_process'
-import { appendFile, mkdir, readFile, writeFile } from 'fs/promises'
+import { type ChildProcess, spawn } from 'child_process'
+import { createHash } from 'crypto'
+import { appendFile, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { cpus } from 'os'
 import { join } from 'path'
@@ -8,7 +9,6 @@ import {
   AI_ENGINE_URL,
   COACH_ENGINE_URL,
   COMMAND_ENV,
-  COMPOSE_PROJECT_NAME,
   DEFAULT_DESKTOP_COACH_MODEL_ID,
   DEFAULT_DESKTOP_SPEECH_MODEL_ID,
   DEFAULT_DESKTOP_TRANSCRIBER_MODEL_ID,
@@ -18,12 +18,13 @@ import {
   DESKTOP_WEB_APP_URL,
   HEALTH_CHECK_TIMEOUT_MS,
   INSTALL_STRATEGY,
+  MIN_DESKTOP_PYTHON_MAJOR,
+  MIN_DESKTOP_PYTHON_MINOR,
 } from './constants'
 import type {
   AiEngineHealthPayload,
   CoachEngineHealthPayload,
   CommandResult,
-  ComposeCommand,
   DesktopRuntimeDetails,
   DesktopRuntimeLocation,
   HealthSnapshot,
@@ -32,55 +33,110 @@ import type {
   SetupManifest,
 } from './types'
 
+type ServiceName = 'ai-engine' | 'coach-engine'
+
+interface RuntimeManifestFile {
+  strategy: 'native-sidecar-beta'
+  pythonCommand: string | null
+  aiEngineDir: string
+  coachEngineDir: string
+  aiVenvPath: string
+  coachVenvPath: string
+  aiEngineLogPath: string
+  coachEngineLogPath: string
+  lastPreparedAt: string | null
+  lastStartedAt: string | null
+}
+
+interface ServiceProcessSnapshot {
+  pid: number | null
+  exitCode: number | null
+  signal: NodeJS.Signals | null
+}
+
+interface PythonCommandDetails {
+  command: string
+  version: string
+  major: number
+  minor: number
+  patch: number
+}
+
 export class DesktopSetupSupport {
   readonly setupRoot = join(app.getPath('userData'), 'desktop-runtime')
   readonly logsDir = join(this.setupRoot, 'logs')
   readonly runtimeDir = join(this.setupRoot, 'runtime')
   readonly modelsDir = join(this.setupRoot, 'models')
+  readonly venvsDir = join(this.setupRoot, 'venvs')
   readonly setupFilePath = join(this.setupRoot, 'setup.json')
   readonly logFilePath = join(this.logsDir, 'desktop-setup.log')
-  readonly composeFilePath = join(this.runtimeDir, 'docker-compose.ai.yml')
+  readonly runtimeManifestPath = join(this.runtimeDir, 'runtime-manifest.json')
+  readonly aiEngineLogPath = join(this.logsDir, 'ai-engine.log')
+  readonly coachEngineLogPath = join(this.logsDir, 'coach-engine.log')
+
+  private cachedPythonCommand: PythonCommandDetails | null = null
+  private readonly serviceProcesses = new Map<ServiceName, ChildProcess>()
+  private readonly serviceProcessState = new Map<ServiceName, ServiceProcessSnapshot>()
+
+  private getBundledPythonCandidates(): string[] {
+    const archDir =
+      process.arch === 'arm64'
+        ? 'aarch64-apple-darwin'
+        : process.arch === 'x64'
+          ? 'x86_64-apple-darwin'
+          : null
+
+    if (!archDir) {
+      return []
+    }
+
+    const roots = app.isPackaged
+      ? [
+          join(
+            (process as NodeJS.Process & { resourcesPath: string }).resourcesPath,
+            'desktop-runtime',
+            'python',
+            archDir,
+          ),
+        ]
+      : [
+          join(__dirname, '..', '..', 'vendor', 'python', archDir),
+          join(process.cwd(), 'vendor', 'python', archDir),
+        ]
+
+    return roots.flatMap((root) => [
+      join(root, 'python', 'bin', 'python3'),
+      join(root, 'python', 'bin', 'python'),
+    ])
+  }
 
   getHostCpuCount(): number {
     return Math.max(1, cpus().length || 1)
   }
 
   hasExistingSetupArtifacts(): boolean {
-    return existsSync(this.setupFilePath) || existsSync(this.composeFilePath)
+    return (
+      existsSync(this.setupFilePath) ||
+      existsSync(this.runtimeManifestPath) ||
+      existsSync(this.getServiceVenvPythonPath('ai-engine')) ||
+      existsSync(this.getServiceVenvPythonPath('coach-engine'))
+    )
   }
 
   async openLogs(): Promise<void> {
     await this.ensureDirectories()
 
-    try {
-      const compose = await this.detectComposeCommand()
-      if (compose && existsSync(this.composeFilePath)) {
-        const result = await this.runCommand(
-          compose.command,
-          [
-            ...compose.argsPrefix,
-            '-p',
-            COMPOSE_PROJECT_NAME,
-            '-f',
-            this.composeFilePath,
-            'logs',
-            '--no-color',
-          ],
-          { allowFailure: true },
-        )
+    const aiTail = await this.readLogTail(this.aiEngineLogPath)
+    const coachTail = await this.readLogTail(this.coachEngineLogPath)
 
-        if (result.stdout || result.stderr) {
-          await this.writeLog('----- docker compose logs -----')
-          if (result.stdout) {
-            await this.writeLog(result.stdout.trim())
-          }
-          if (result.stderr) {
-            await this.writeLog(result.stderr.trim())
-          }
-        }
-      }
-    } catch {
-      // Fall back to opening the existing log file.
+    if (aiTail) {
+      await this.writeLog('----- ai-engine log tail -----')
+      await this.writeLog(aiTail)
+    }
+
+    if (coachTail) {
+      await this.writeLog('----- coach-engine log tail -----')
+      await this.writeLog(coachTail)
     }
 
     await shell.openPath(this.logFilePath)
@@ -95,22 +151,31 @@ export class DesktopSetupSupport {
       modelsDir: this.modelsDir,
       huggingFaceDir: join(this.modelsDir, 'huggingface'),
       logsPath: this.logFilePath,
-      composeFilePath: this.composeFilePath,
+      runtimeManifestPath: this.runtimeManifestPath,
+      aiEngineLogPath: this.aiEngineLogPath,
+      coachEngineLogPath: this.coachEngineLogPath,
     }
 
     const target = targets[location]
-    if (location === 'logsPath') {
-      await shell.openPath(target)
+    const parentFallback =
+      location === 'runtimeManifestPath'
+        ? this.runtimeDir
+        : location === 'aiEngineLogPath' || location === 'coachEngineLogPath'
+          ? this.logsDir
+          : target
+
+    if (!existsSync(target)) {
+      await shell.openPath(parentFallback)
       return
     }
 
-    if (location === 'composeFilePath') {
-      if (existsSync(target)) {
-        shell.showItemInFolder(target)
-        return
-      }
-
-      await shell.openPath(this.runtimeDir)
+    if (
+      location === 'logsPath' ||
+      location === 'runtimeManifestPath' ||
+      location === 'aiEngineLogPath' ||
+      location === 'coachEngineLogPath'
+    ) {
+      shell.showItemInFolder(target)
       return
     }
 
@@ -122,6 +187,7 @@ export class DesktopSetupSupport {
     details: DesktopRuntimeDetails
   }> {
     const manifest = await this.readManifest()
+    const pythonCommand = await this.detectPythonCommand()
     const [aiPayload, coachPayload] = await Promise.all([
       this.fetchJson<AiEngineHealthPayload>(AI_ENGINE_URL),
       this.fetchJson<CoachEngineHealthPayload>(COACH_ENGINE_URL),
@@ -143,70 +209,44 @@ export class DesktopSetupSupport {
 
     return {
       health,
-      details: this.createRuntimeDetails({
+      details: await this.createRuntimeDetails({
         manifest,
         health,
         aiPayload,
         coachPayload,
+        pythonCommand,
       }),
     }
   }
 
   async inspectRuntimeFailure(): Promise<RuntimeFailureSnapshot | null> {
-    const compose = await this.detectComposeCommand()
-    if (!compose || !existsSync(this.composeFilePath)) {
-      return null
-    }
+    for (const serviceName of ['ai-engine', 'coach-engine'] as const) {
+      const snapshot = this.serviceProcessState.get(serviceName)
+      if (!snapshot || snapshot.exitCode === null) {
+        continue
+      }
 
-    const stateResult = await this.runCommand(
-      compose.command,
-      [
-        ...compose.argsPrefix,
-        '-p',
-        COMPOSE_PROJECT_NAME,
-        '-f',
-        this.composeFilePath,
-        'ps',
-        '-a',
-        '--format',
-        'json',
-      ],
-      { allowFailure: true },
-    )
-
-    if (stateResult.exitCode !== 0 || !stateResult.stdout.trim()) {
-      return null
-    }
-
-    const lines = stateResult.stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-
-    for (const line of lines) {
-      try {
-        const payload = JSON.parse(line) as {
-          Service?: string
-          State?: string
-          ExitCode?: number
+      const logTail = await this.readLogTail(this.getServiceLogPath(serviceName))
+      if (
+        serviceName === 'coach-engine' &&
+        /out of memory|oom|killed/i.test(logTail)
+      ) {
+        await this.writeLog(
+          'Coach runtime exited while loading the local model. This usually means the model ran out of memory.',
+        )
+        return {
+          type: 'coach-oom',
+          message:
+            'Cadence ran out of memory while loading the conversation coach. Please retry setup so it can start again with the lighter local profile.',
         }
+      }
 
-        if (
-          payload.Service === 'coach-engine' &&
-          payload.State === 'exited' &&
-          payload.ExitCode === 137
-        ) {
-          await this.writeLog(
-            'Coach runtime exited with code 137. This usually means the local model ran out of memory while loading.',
-          )
-          return {
-            type: 'coach-oom',
-            message:
-              'Cadence ran out of memory while loading the conversation coach. I have switched the desktop beta to a lighter coach profile. Please click Retry setup once more.',
-          }
-        }
-      } catch {
-        // Ignore lines that are not JSON.
+      return {
+        type: 'service-exit',
+        message:
+          serviceName === 'ai-engine'
+            ? 'Cadence could not keep the local speech tools running. Open View details to see the latest service log, then try setup again.'
+            : 'Cadence could not keep the local coach running. Open View details to see the latest service log, then try setup again.',
       }
     }
 
@@ -241,71 +281,228 @@ export class DesktopSetupSupport {
     }
   }
 
-  async detectComposeCommand(): Promise<ComposeCommand | null> {
-    const dockerCompose = await this.runCommand('docker', ['compose', 'version'], {
-      allowFailure: true,
-    })
-    if (
-      dockerCompose.exitCode === 0 &&
-      dockerCompose.stdout.includes('Docker Compose')
-    ) {
-      return { command: 'docker', argsPrefix: ['compose'] }
-    }
-
-    const legacyCompose = await this.runCommand('docker-compose', ['version'], {
-      allowFailure: true,
-    })
-    if (
-      legacyCompose.exitCode === 0 &&
-      (legacyCompose.stdout.toLowerCase().includes('docker-compose') ||
-        legacyCompose.stdout.toLowerCase().includes('docker compose'))
-    ) {
-      return { command: 'docker-compose', argsPrefix: [] }
-    }
-
-    return null
+  async detectPythonCommand(): Promise<string | null> {
+    const resolution = await this.resolvePythonCommand()
+    return resolution.supported?.command ?? null
   }
 
-  isDockerDaemonUnavailable(output: string | null | undefined): boolean {
-    const normalized = (output ?? '').toLowerCase()
-    return (
-      normalized.includes('cannot connect to the docker daemon') ||
-      normalized.includes('is the docker daemon running') ||
-      normalized.includes('error during connect') ||
-      normalized.includes('docker.sock')
-    )
-  }
+  private async resolvePythonCommand(): Promise<{
+    supported: PythonCommandDetails | null
+    incompatible: PythonCommandDetails | null
+  }> {
+    if (this.cachedPythonCommand) {
+      return {
+        supported: this.cachedPythonCommand,
+        incompatible: null,
+      }
+    }
 
-  async openLocalRuntimeHelper(): Promise<boolean> {
-    const candidates =
-      process.platform === 'darwin'
-        ? ['/Applications/Docker.app', `${process.env.HOME ?? ''}/Applications/Docker.app`]
-        : []
+    const candidates = [
+      process.env.CADENCE_DESKTOP_PYTHON,
+      ...this.getBundledPythonCandidates(),
+      'python3.12',
+      'python3.11',
+      'python3.10',
+      'python3',
+      'python',
+    ].filter((candidate): candidate is string => Boolean(candidate))
 
-    for (const candidate of candidates.filter(Boolean)) {
-      if (!existsSync(candidate)) {
+    let bestIncompatible: PythonCommandDetails | null = null
+
+    for (const candidate of candidates) {
+      const details = await this.inspectPythonCommand(candidate)
+      if (!details) {
         continue
       }
 
-      const result = await shell.openPath(candidate)
-      if (!result) {
-        await this.writeLog(`Opened local runtime helper at ${candidate}`)
-        return true
+      if (this.isSupportedPython(details)) {
+        this.cachedPythonCommand = details
+        await this.writeLog(
+          `Using ${details.command} (${details.version}) for the local desktop runtime.`,
+        )
+        return {
+          supported: details,
+          incompatible: bestIncompatible,
+        }
+      }
+
+      if (
+        !bestIncompatible ||
+        details.major > bestIncompatible.major ||
+        (details.major === bestIncompatible.major &&
+          details.minor > bestIncompatible.minor) ||
+        (details.major === bestIncompatible.major &&
+          details.minor === bestIncompatible.minor &&
+          details.patch > bestIncompatible.patch)
+      ) {
+        bestIncompatible = details
       }
     }
 
-    const fallback = await this.runCommand('open', ['-a', 'Docker'], {
-      allowFailure: true,
-    })
-    if (fallback.exitCode === 0) {
-      await this.writeLog('Opened local runtime helper with open -a Docker')
-      return true
+    return {
+      supported: null,
+      incompatible: bestIncompatible,
+    }
+  }
+
+  async prepareNativeRuntime({
+    aiEngineDir,
+    coachEngineDir,
+    onStatus,
+    onInstallChunk,
+  }: {
+    aiEngineDir: string
+    coachEngineDir: string
+    onStatus?: (step: string, percent: number) => void
+    onInstallChunk?: (chunk: string) => void
+  }): Promise<string> {
+    await this.ensureDirectories()
+
+    const pythonResolution = await this.resolvePythonCommand()
+    const pythonCommand = pythonResolution.supported?.command ?? null
+    if (!pythonCommand) {
+      if (pythonResolution.incompatible) {
+        await this.writeLog(
+          `Cadence found ${pythonResolution.incompatible.command} (${pythonResolution.incompatible.version}), but it needs Python ${MIN_DESKTOP_PYTHON_MAJOR}.${MIN_DESKTOP_PYTHON_MINOR}+ for the local desktop runtime.`,
+        )
+        throw new Error(
+          `Cadence needs Python ${MIN_DESKTOP_PYTHON_MAJOR}.${MIN_DESKTOP_PYTHON_MINOR} or newer on this Mac. I found ${pythonResolution.incompatible.version} instead. Please install Python ${MIN_DESKTOP_PYTHON_MAJOR}.${MIN_DESKTOP_PYTHON_MINOR}+ and try setup again.`,
+        )
+      }
+
+      if (app.isPackaged) {
+        throw new Error(
+          'Cadence could not find its bundled Python runtime inside the desktop app. Reinstall the app, then try setup again.',
+        )
+      }
+
+      throw new Error(
+        `Cadence could not find Python ${MIN_DESKTOP_PYTHON_MAJOR}.${MIN_DESKTOP_PYTHON_MINOR} or newer on this Mac. Install Python ${MIN_DESKTOP_PYTHON_MAJOR}.${MIN_DESKTOP_PYTHON_MINOR}+ and try setup again.`,
+      )
     }
 
-    if (fallback.stderr.trim()) {
-      await this.writeLog(fallback.stderr.trim())
+    onStatus?.('Preparing the local Cadence helper on this Mac.', 20)
+    await this.ensureServiceEnvironment({
+      serviceName: 'ai-engine',
+      serviceDir: aiEngineDir,
+      pythonCommand,
+      onStatus,
+      onInstallChunk,
+      createPercent: 24,
+      installPercent: 34,
+      installMessage: 'Installing the local speech tools.',
+    })
+
+    await this.ensureServiceEnvironment({
+      serviceName: 'coach-engine',
+      serviceDir: coachEngineDir,
+      pythonCommand,
+      onStatus,
+      onInstallChunk,
+      createPercent: 40,
+      installPercent: 50,
+      installMessage: 'Installing the local coach tools.',
+    })
+
+    const manifest: RuntimeManifestFile = {
+      strategy: INSTALL_STRATEGY,
+      pythonCommand,
+      aiEngineDir,
+      coachEngineDir,
+      aiVenvPath: this.getServiceVenvDir('ai-engine'),
+      coachVenvPath: this.getServiceVenvDir('coach-engine'),
+      aiEngineLogPath: this.aiEngineLogPath,
+      coachEngineLogPath: this.coachEngineLogPath,
+      lastPreparedAt: new Date().toISOString(),
+      lastStartedAt: null,
     }
-    return false
+    await this.persistRuntimeManifest(manifest)
+    return pythonCommand
+  }
+
+  private isSupportedPython(details: PythonCommandDetails): boolean {
+    if (details.major !== MIN_DESKTOP_PYTHON_MAJOR) {
+      return details.major > MIN_DESKTOP_PYTHON_MAJOR
+    }
+
+    return details.minor >= MIN_DESKTOP_PYTHON_MINOR
+  }
+
+  private async inspectPythonCommand(
+    command: string,
+  ): Promise<PythonCommandDetails | null> {
+    const result = await this.runCommand(
+      command,
+      [
+        '-c',
+        'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]}")',
+      ],
+      {
+        allowFailure: true,
+      },
+    )
+
+    const versionText = result.stdout.trim() || result.stderr.trim()
+    const match = versionText.match(/(\d+)\.(\d+)\.(\d+)/)
+    if (!match) {
+      return null
+    }
+
+    const [, majorText, minorText, patchText] = match
+    return {
+      command,
+      version: `${majorText}.${minorText}.${patchText}`,
+      major: Number.parseInt(majorText, 10),
+      minor: Number.parseInt(minorText, 10),
+      patch: Number.parseInt(patchText, 10),
+    }
+  }
+
+  async startNativeRuntime({
+    aiEngineDir,
+    coachEngineDir,
+  }: {
+    aiEngineDir: string
+    coachEngineDir: string
+  }): Promise<void> {
+    await this.ensureDirectories()
+    await this.stopAllRuntimeProcesses()
+
+    this.serviceProcessState.clear()
+
+    await this.spawnServiceProcess({
+      serviceName: 'ai-engine',
+      serviceDir: aiEngineDir,
+      pythonPath: this.getServiceVenvPythonPath('ai-engine'),
+      env: this.createServiceEnv('ai-engine'),
+    })
+
+    await this.spawnServiceProcess({
+      serviceName: 'coach-engine',
+      serviceDir: coachEngineDir,
+      pythonPath: this.getServiceVenvPythonPath('coach-engine'),
+      env: this.createServiceEnv('coach-engine'),
+    })
+
+    const manifest = await this.readRuntimeManifest()
+    if (manifest) {
+      await this.persistRuntimeManifest({
+        ...manifest,
+        lastStartedAt: new Date().toISOString(),
+      })
+    }
+  }
+
+  async stopAllRuntimeProcesses(): Promise<void> {
+    for (const serviceName of ['ai-engine', 'coach-engine'] as const) {
+      await this.stopServiceProcess(serviceName)
+    }
+  }
+
+  dispose(): void {
+    for (const serviceName of ['ai-engine', 'coach-engine'] as const) {
+      void this.stopServiceProcess(serviceName)
+    }
   }
 
   async runCommand(
@@ -315,8 +512,11 @@ export class DesktopSetupSupport {
   ): Promise<CommandResult> {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
-        env: COMMAND_ENV,
-        cwd: this.runtimeDir,
+        env: {
+          ...COMMAND_ENV,
+          ...(options.env ?? {}),
+        },
+        cwd: options.cwd ?? this.runtimeDir,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
 
@@ -367,22 +567,11 @@ export class DesktopSetupSupport {
     const normalized = line.toLowerCase()
 
     if (
-      normalized.includes('load build definition') ||
-      normalized.includes('load metadata') ||
-      normalized.includes('resolve image config') ||
-      normalized.includes('pulling fs layer') ||
-      normalized.includes('downloading')
+      normalized.includes('creating virtual environment') ||
+      normalized.includes('python -m venv') ||
+      normalized.includes('ensurepip')
     ) {
-      return 'Downloading the pieces Cadence needs for the first launch.'
-    }
-
-    if (
-      normalized.includes('apt-get') ||
-      normalized.includes('ffmpeg') ||
-      normalized.includes('espeak') ||
-      normalized.includes('libsndfile')
-    ) {
-      return 'Installing audio support for listening and voice playback.'
+      return 'Preparing Cadence locally on this Mac.'
     }
 
     if (
@@ -395,18 +584,17 @@ export class DesktopSetupSupport {
     }
 
     if (
-      normalized.includes('exporting to image') ||
-      normalized.includes('naming to') ||
-      normalized.includes('writing image')
+      normalized.includes('building wheel') ||
+      normalized.includes('running build') ||
+      normalized.includes('preparing metadata')
     ) {
-      return 'Finishing the setup in the background.'
+      return 'Finishing the local setup in the background.'
     }
 
     if (
-      normalized.includes('started') ||
-      normalized.includes('running') ||
-      normalized.includes('created') ||
-      normalized.includes('healthy')
+      normalized.includes('uvicorn') ||
+      normalized.includes('application startup complete') ||
+      normalized.includes('running on http')
     ) {
       return 'Starting your speaking tools.'
     }
@@ -425,75 +613,15 @@ export class DesktopSetupSupport {
     }
   }
 
-  async writeComposeFile(
-    aiEngineDir: string,
-    coachEngineDir: string,
-  ): Promise<void> {
-    const huggingFaceDir = join(this.modelsDir, 'huggingface')
-    await mkdir(huggingFaceDir, { recursive: true })
-
-    const quote = (value: string) => JSON.stringify(value)
-    const hostCpuCount = String(this.getHostCpuCount())
-
-    const composeYaml = `services:
-  ai-engine:
-    build:
-      context: ${quote(aiEngineDir)}
-      dockerfile: "Dockerfile"
-    environment:
-      AI_ENGINE_HOST: "0.0.0.0"
-      AI_ENGINE_PORT: "8000"
-      HF_HOME: "/models/huggingface"
-      TRANSFORMERS_CACHE: "/models/huggingface"
-      CADENCE_LOG_LEVEL: "INFO"
-      CADENCE_CPU_THREADS: ${quote(hostCpuCount)}
-      OMP_NUM_THREADS: ${quote(hostCpuCount)}
-      OMP_THREAD_LIMIT: ${quote(hostCpuCount)}
-      OPENBLAS_NUM_THREADS: ${quote(hostCpuCount)}
-      MKL_NUM_THREADS: ${quote(hostCpuCount)}
-      VECLIB_MAXIMUM_THREADS: ${quote(hostCpuCount)}
-      NUMEXPR_NUM_THREADS: ${quote(hostCpuCount)}
-      HF_TOKEN: ${quote(process.env.HF_TOKEN ?? '')}
-    ports:
-      - "127.0.0.1:8000:8000"
-    volumes:
-      - ${quote(`${huggingFaceDir}:/models/huggingface`)}
-
-  coach-engine:
-    build:
-      context: ${quote(coachEngineDir)}
-      dockerfile: "Dockerfile"
-    environment:
-      COACH_ENGINE_HOST: "0.0.0.0"
-      COACH_ENGINE_PORT: "8001"
-      COACH_LLM_MODEL_ID: ${JSON.stringify(DEFAULT_DESKTOP_COACH_MODEL_ID)}
-      COACH_LLM_DEVICE: "cpu"
-      HF_HOME: "/models/huggingface"
-      TRANSFORMERS_CACHE: "/models/huggingface"
-      CADENCE_LOG_LEVEL: "INFO"
-      CADENCE_CPU_THREADS: ${quote(hostCpuCount)}
-      OMP_NUM_THREADS: ${quote(hostCpuCount)}
-      OMP_THREAD_LIMIT: ${quote(hostCpuCount)}
-      OPENBLAS_NUM_THREADS: ${quote(hostCpuCount)}
-      MKL_NUM_THREADS: ${quote(hostCpuCount)}
-      VECLIB_MAXIMUM_THREADS: ${quote(hostCpuCount)}
-      NUMEXPR_NUM_THREADS: ${quote(hostCpuCount)}
-      HF_TOKEN: ${quote(process.env.HF_TOKEN ?? '')}
-    ports:
-      - "127.0.0.1:8001:8001"
-    volumes:
-      - ${quote(`${huggingFaceDir}:/models/huggingface`)}
-`
-
-    await writeFile(this.composeFilePath, composeYaml, 'utf8')
-  }
-
   async ensureDirectories(): Promise<void> {
     await mkdir(this.logsDir, { recursive: true })
     await mkdir(this.runtimeDir, { recursive: true })
     await mkdir(this.modelsDir, { recursive: true })
+    await mkdir(this.venvsDir, { recursive: true })
     await mkdir(join(this.modelsDir, 'huggingface'), { recursive: true })
     await appendFile(this.logFilePath, '', 'utf8')
+    await appendFile(this.aiEngineLogPath, '', 'utf8')
+    await appendFile(this.coachEngineLogPath, '', 'utf8')
   }
 
   async writeLog(message: string): Promise<void> {
@@ -517,6 +645,335 @@ export class DesktopSetupSupport {
     await writeFile(this.setupFilePath, JSON.stringify(manifest, null, 2), 'utf8')
   }
 
+  private getServiceVenvDir(serviceName: ServiceName): string {
+    return join(this.venvsDir, serviceName)
+  }
+
+  private getServiceVenvPythonPath(serviceName: ServiceName): string {
+    return process.platform === 'win32'
+      ? join(this.getServiceVenvDir(serviceName), 'Scripts', 'python.exe')
+      : join(this.getServiceVenvDir(serviceName), 'bin', 'python')
+  }
+
+  private getServiceLogPath(serviceName: ServiceName): string {
+    return serviceName === 'ai-engine'
+      ? this.aiEngineLogPath
+      : this.coachEngineLogPath
+  }
+
+  private getServicePidPath(serviceName: ServiceName): string {
+    return join(this.runtimeDir, `${serviceName}.pid`)
+  }
+
+  private getInstallMarkerPath(serviceName: ServiceName): string {
+    return join(this.runtimeDir, `${serviceName}.install.json`)
+  }
+
+  private createServiceEnv(serviceName: ServiceName): NodeJS.ProcessEnv {
+    const threadCount = String(this.getHostCpuCount())
+    const shared = {
+      ...process.env,
+      HF_HOME: join(this.modelsDir, 'huggingface'),
+      TRANSFORMERS_CACHE: join(this.modelsDir, 'huggingface'),
+      CADENCE_LOG_LEVEL: 'INFO',
+      CADENCE_CPU_THREADS: threadCount,
+      OMP_NUM_THREADS: threadCount,
+      OMP_THREAD_LIMIT: threadCount,
+      OPENBLAS_NUM_THREADS: threadCount,
+      MKL_NUM_THREADS: threadCount,
+      VECLIB_MAXIMUM_THREADS: threadCount,
+      NUMEXPR_NUM_THREADS: threadCount,
+      PYTHONUNBUFFERED: '1',
+      HF_TOKEN: process.env.HF_TOKEN ?? '',
+    }
+
+    if (serviceName === 'ai-engine') {
+      return {
+        ...shared,
+        AI_ENGINE_HOST: '127.0.0.1',
+        AI_ENGINE_PORT: '8000',
+      }
+    }
+
+    return {
+      ...shared,
+      COACH_ENGINE_HOST: '127.0.0.1',
+      COACH_ENGINE_PORT: '8001',
+      COACH_LLM_MODEL_ID: DEFAULT_DESKTOP_COACH_MODEL_ID,
+    }
+  }
+
+  private async ensureServiceEnvironment({
+    serviceName,
+    serviceDir,
+    pythonCommand,
+    onStatus,
+    onInstallChunk,
+    createPercent,
+    installPercent,
+    installMessage,
+  }: {
+    serviceName: ServiceName
+    serviceDir: string
+    pythonCommand: string
+    onStatus?: (step: string, percent: number) => void
+    onInstallChunk?: (chunk: string) => void
+    createPercent: number
+    installPercent: number
+    installMessage: string
+  }): Promise<void> {
+    const venvDir = this.getServiceVenvDir(serviceName)
+    const pythonPath = this.getServiceVenvPythonPath(serviceName)
+    const requirementsPath = join(serviceDir, 'requirements.txt')
+    const installMarkerPath = this.getInstallMarkerPath(serviceName)
+    const requirementsHash = createHash('sha256')
+      .update(await readFile(requirementsPath, 'utf8'))
+      .digest('hex')
+
+    if (!existsSync(pythonPath)) {
+      onStatus?.('Preparing the local Cadence helper on this Mac.', createPercent)
+      await this.writeLog(`Creating virtual environment for ${serviceName}`)
+      const createVenv = await this.runCommand(
+        pythonCommand,
+        ['-m', 'venv', venvDir],
+        {
+          allowFailure: true,
+          cwd: serviceDir,
+          onStdoutChunk: onInstallChunk,
+          onStderrChunk: onInstallChunk,
+        },
+      )
+
+      if (createVenv.exitCode !== 0) {
+        throw new Error(
+          createVenv.stderr.trim() ||
+            createVenv.stdout.trim() ||
+            `Cadence could not create the local environment for ${serviceName}.`,
+        )
+      }
+    }
+
+    const installMarker = await this.readInstallMarker(installMarkerPath)
+    if (installMarker?.requirementsHash === requirementsHash) {
+      return
+    }
+
+    onStatus?.(installMessage, installPercent)
+    await this.writeLog(`Installing local dependencies for ${serviceName}`)
+
+    const upgradePip = await this.runCommand(
+      pythonPath,
+      ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel'],
+      {
+        allowFailure: true,
+        cwd: serviceDir,
+        env: this.createServiceEnv(serviceName),
+        onStdoutChunk: onInstallChunk,
+        onStderrChunk: onInstallChunk,
+      },
+    )
+
+    if (upgradePip.exitCode !== 0) {
+      throw new Error(
+        upgradePip.stderr.trim() ||
+          upgradePip.stdout.trim() ||
+          `Cadence could not prepare pip for ${serviceName}.`,
+      )
+    }
+
+    const installRequirements = await this.runCommand(
+      pythonPath,
+      ['-m', 'pip', 'install', '-r', 'requirements.txt'],
+      {
+        allowFailure: true,
+        cwd: serviceDir,
+        env: this.createServiceEnv(serviceName),
+        onStdoutChunk: onInstallChunk,
+        onStderrChunk: onInstallChunk,
+      },
+    )
+
+    if (installRequirements.exitCode !== 0) {
+      throw new Error(
+        installRequirements.stderr.trim() ||
+          installRequirements.stdout.trim() ||
+          `Cadence could not install the local dependencies for ${serviceName}.`,
+      )
+    }
+
+    await writeFile(
+      installMarkerPath,
+      JSON.stringify(
+        {
+          requirementsHash,
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    )
+  }
+
+  private async spawnServiceProcess({
+    serviceName,
+    serviceDir,
+    pythonPath,
+    env,
+  }: {
+    serviceName: ServiceName
+    serviceDir: string
+    pythonPath: string
+    env: NodeJS.ProcessEnv
+  }): Promise<void> {
+    if (!existsSync(pythonPath)) {
+      throw new Error(
+        `Cadence could not find the local Python environment for ${serviceName}.`,
+      )
+    }
+
+    await this.writeLog(`Starting ${serviceName} from ${serviceDir}`)
+    const child = spawn(pythonPath, ['-u', 'main.py'], {
+      cwd: serviceDir,
+      env: {
+        ...COMMAND_ENV,
+        ...env,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    this.serviceProcesses.set(serviceName, child)
+    this.serviceProcessState.set(serviceName, {
+      pid: child.pid ?? null,
+      exitCode: null,
+      signal: null,
+    })
+    await writeFile(this.getServicePidPath(serviceName), String(child.pid ?? ''), 'utf8')
+
+    child.stdout?.on('data', (chunk) => {
+      void this.writeServiceChunk(serviceName, chunk.toString())
+    })
+
+    child.stderr?.on('data', (chunk) => {
+      void this.writeServiceChunk(serviceName, chunk.toString())
+    })
+
+    child.on('error', (error) => {
+      this.serviceProcessState.set(serviceName, {
+        pid: child.pid ?? null,
+        exitCode: 1,
+        signal: null,
+      })
+      void this.writeLog(`${serviceName} failed to start: ${error.message}`)
+    })
+
+    child.on('exit', (code, signal) => {
+      this.serviceProcesses.delete(serviceName)
+      this.serviceProcessState.set(serviceName, {
+        pid: child.pid ?? null,
+        exitCode: code ?? 0,
+        signal,
+      })
+      void this.writeLog(
+        `${serviceName} exited code=${code ?? 'null'} signal=${signal ?? 'null'}`,
+      )
+      void rm(this.getServicePidPath(serviceName), { force: true })
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 600))
+  }
+
+  private async stopServiceProcess(serviceName: ServiceName): Promise<void> {
+    const child = this.serviceProcesses.get(serviceName)
+    if (child && !child.killed) {
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // Ignore
+      }
+    }
+
+    const pidPath = this.getServicePidPath(serviceName)
+    if (existsSync(pidPath)) {
+      const pid = await readFile(pidPath, 'utf8').catch(() => '')
+      const normalized = Number(pid.trim())
+      if (Number.isFinite(normalized) && normalized > 0) {
+        try {
+          process.kill(normalized, 'SIGTERM')
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    this.serviceProcesses.delete(serviceName)
+    await rm(pidPath, { force: true })
+  }
+
+  private async writeServiceChunk(
+    serviceName: ServiceName,
+    chunk: string,
+  ): Promise<void> {
+    const serviceLogPath = this.getServiceLogPath(serviceName)
+    await appendFile(serviceLogPath, chunk, 'utf8')
+
+    const lines = chunk
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    for (const line of lines) {
+      await this.writeLog(`[${serviceName}] ${line}`)
+    }
+  }
+
+  private async readRuntimeManifest(): Promise<RuntimeManifestFile | null> {
+    try {
+      const raw = await readFile(this.runtimeManifestPath, 'utf8')
+      return JSON.parse(raw) as RuntimeManifestFile
+    } catch {
+      return null
+    }
+  }
+
+  private async persistRuntimeManifest(
+    manifest: RuntimeManifestFile,
+  ): Promise<void> {
+    await writeFile(
+      this.runtimeManifestPath,
+      JSON.stringify(manifest, null, 2),
+      'utf8',
+    )
+  }
+
+  private async readInstallMarker(
+    installMarkerPath: string,
+  ): Promise<{ requirementsHash?: string } | null> {
+    try {
+      const raw = await readFile(installMarkerPath, 'utf8')
+      return JSON.parse(raw) as { requirementsHash?: string }
+    } catch {
+      return null
+    }
+  }
+
+  private async readLogTail(path: string, maxLines = 60): Promise<string> {
+    if (!existsSync(path)) {
+      return ''
+    }
+
+    try {
+      const raw = await readFile(path, 'utf8')
+      return raw
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .slice(-maxLines)
+        .join('\n')
+    } catch {
+      return ''
+    }
+  }
+
   private async fetchJson<T>(url: string): Promise<T | null> {
     try {
       const response = await fetch(url, {
@@ -533,17 +990,19 @@ export class DesktopSetupSupport {
     }
   }
 
-  private createRuntimeDetails({
+  private async createRuntimeDetails({
     manifest,
     health,
     aiPayload,
     coachPayload,
+    pythonCommand,
   }: {
     manifest: SetupManifest | null
     health: HealthSnapshot
     aiPayload: AiEngineHealthPayload | null
     coachPayload: CoachEngineHealthPayload | null
-  }): DesktopRuntimeDetails {
+    pythonCommand: string | null
+  }): Promise<DesktopRuntimeDetails> {
     const huggingFaceDir = join(this.modelsDir, 'huggingface')
     const hostCpuCount = this.getHostCpuCount()
 
@@ -556,9 +1015,11 @@ export class DesktopSetupSupport {
       runtimeDir: this.runtimeDir,
       modelsDir: this.modelsDir,
       huggingFaceDir,
-      composeFilePath: this.composeFilePath,
-      composeFilePresent: existsSync(this.composeFilePath),
+      runtimeManifestPath: this.runtimeManifestPath,
+      runtimeManifestPresent: existsSync(this.runtimeManifestPath),
       logsPath: this.logFilePath,
+      aiEngineLogPath: this.aiEngineLogPath,
+      coachEngineLogPath: this.coachEngineLogPath,
       setupManifestPresent: manifest !== null,
       endpoints: {
         webApp: DESKTOP_WEB_APP_URL,
@@ -570,6 +1031,7 @@ export class DesktopSetupSupport {
           aiPayload?.hfTokenConfigured === true ||
           aiPayload?.diagnostics?.hfTokenConfigured === true ||
           Boolean(process.env.HF_TOKEN),
+        pythonCommand,
       },
       performance: {
         hostCpuCount,
@@ -577,7 +1039,7 @@ export class DesktopSetupSupport {
         containerCpuLimitsApplied: false,
         containerMemoryLimitsApplied: false,
         note:
-          'Cadence does not apply per-container CPU or memory caps. On macOS, Docker Desktop still controls the overall machine budget and local engines run on CPU inside that environment.',
+          'Cadence ships its own local runtime in the desktop app, starts the speech and coach services directly on this Mac, and can use native acceleration when the local model supports it.',
       },
       aiEngine: {
         modelId:

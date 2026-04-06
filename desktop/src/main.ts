@@ -122,6 +122,7 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   disposeSetupIpc?.()
   disposeSetupIpc = null
+  setupManager?.dispose()
   nextServer?.kill()
   nextServer = null
 })

@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Reference pronunciation is unavailable. If you are using Docker, make sure the ai-engine service is healthy. If you are running locally, start src/backend/ai-engine/main.py with OmniVoice installed.",
+          "Reference pronunciation is unavailable. Make sure the local ai-engine service is healthy, then try again.",
       },
       { status: 503 },
     );
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Reference pronunciation is unavailable. If you are using Docker, make sure the ai-engine service is healthy. If you are running locally, start src/backend/ai-engine/main.py with OmniVoice installed.",
+          "Reference pronunciation is unavailable. Make sure the local ai-engine service is healthy, then try again.",
       },
       { status: 503 },
     );

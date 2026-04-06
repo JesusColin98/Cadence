@@ -13,33 +13,33 @@ import { SplitText } from "@/components/ui/split-text";
 import { TrustedByStrip } from "@/components/ui/trusted-by-strip";
 
 export const metadata: Metadata = {
-  title: "AI Pronunciation Feedback That Names the Phoneme",
+  title: "Speak English Clearly. Sound Confident. Get Understood.",
   description:
-    "Most tools give you a score. Cadence shows you exactly which phoneme is off — then hands you back to the microphone with a clear cue. Hosted plans for learners, plus an open-source path to run locally.",
+    "Most tools give you a score. Cadence shows you exactly which sound is off — then hands you back to the microphone with a clear cue to fix it. Hosted plans for learners, plus an open-source path to run locally.",
   openGraph: {
-    title: "Cadence — AI Pronunciation Feedback That Names the Phoneme",
+    title: "Cadence — Speak English Clearly. Sound Confident. Get Understood.",
     description:
-      "Most tools give you a score. Cadence shows you exactly which phoneme is off — with hosted plans for learners and an open-source local path.",
+      "Most tools give you a score. Cadence shows you exactly which sound is off — with hosted plans for learners and an open-source local path.",
   },
 };
 
 const processCards = [
   {
-    title: "Record one focused take",
+    title: "Speak naturally",
     description:
-      "One word, one recording. Short rounds keep the loop tight enough to run every day without mental overhead.",
+      "Talk the way you normally would — full sentences, real words. Short focused rounds keep the practice loop tight enough to fit into any day.",
     icon: Microphone,
   },
   {
-    title: "See exactly which phoneme is off",
+    title: "See exactly which sound is off",
     description:
-      "The engine decodes your speech into phonemes and compares them against the target — surfacing the specific sound that’s pulling your pronunciation off.",
+      "Cadence analyzes how you speak and compares it to the target — surfacing the precise sound that’s pulling your pronunciation off.",
     icon: Activity,
   },
   {
-    title: "Repeat with a clear target",
+    title: "Fix it and try again",
     description:
-      "Every result names the next thing to focus on. Feedback never ends at a score — it hands you straight back to the microphone.",
+      "Every result names the next thing to focus on. Feedback never ends at a score — it hands you straight back to the microphone with a clear target.",
     icon: PlayCircle,
   },
 ];
@@ -48,22 +48,22 @@ const moduleCards = [
   {
     title: "Guided modules",
     description:
-      "A structured sequence that moves from foundational sounds into harder phoneme patterns — one clear win at a time.",
+      "A structured sequence that moves from foundational sounds into harder pronunciation patterns — one clear win at a time.",
   },
   {
     title: "B1–C1 conversation practice",
     description:
-      "Ten leveled speaking scenarios — from coffee chat introductions to client check-in calls — so phoneme work lands in real dialogue, not isolated drills.",
+      "Ten leveled speaking scenarios — from coffee chat introductions to client check-in calls — so your practice lands in real dialogue, not isolated drills.",
   },
   {
     title: "Daily reminders",
     description:
-      "Short nudges that bring learners back before the practice streak breaks — not a notification flood, just the right tap at the right moment.",
+      "Short nudges that bring you back before the practice streak breaks — not a notification flood, just the right tap at the right moment.",
   },
   {
     title: "Progress and levels",
     description:
-      "Visible milestones, level-ups, and per-sound mastery so the improvement is something learners can actually see.",
+      "Visible milestones, level-ups, and per-sound mastery so the improvement is something you can actually see and hear.",
   },
   {
     title: "Streak system",
@@ -84,21 +84,21 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-yellow-green">
                   <Activity size={18} filled color="currentColor" />
-                  <span className="eyebrow text-sm">Phoneme feedback · Hosted plans · Open source local</span>
+                  <span className="eyebrow text-sm">Real conversations · Precise feedback · Open source</span>
                 </div>
                 <div className="space-y-3">
                   <SplitText
-                    text="Most tools give you a score. Cadence gives you the phoneme."
+                    text="Most tools tell you what you said. Cadence tells you what to fix."
                     tag="h1"
                     delay={22}
                     duration={760}
-                    className="max-w-3xl text-4xl font-semibold leading-tight sm:text-5xl"
+                    className="max-w-3xl text-balance text-4xl font-semibold leading-tight sm:text-5xl"
                   />
                   <p className="max-w-2xl text-base leading-8 text-white/78 sm:text-lg">
-                    Say one word. The AI decodes your phonemes, spots the
-                    mismatch against the target, and hands you a clear cue to
-                    fix before the next take. No vague scores. No generic
-                    transcripts. Just the exact sound that needs work.
+                    Speak naturally. Cadence listens, finds the exact sound
+                    you&apos;re getting wrong, and gives you a clear cue to fix
+                    it before your next try. No vague scores. No generic
+                    transcripts. Just the specific sound that needs work.
                   </p>
                 </div>
               </div>
@@ -192,7 +192,7 @@ export default function Home() {
                   </h2>
                   <p className="text-base leading-8 text-iron-grey">
                     Cadence is built around a loop short enough to close before
-                    your coffee gets cold: record, see the phoneme gap, get the
+                    your coffee gets cold: speak, see what&apos;s off, get the
                     cue, go again. That tightness is the product.
                   </p>
                 </div>
@@ -204,12 +204,12 @@ export default function Home() {
                 Not another transcript
               </p>
               <p className="mt-4 text-2xl font-semibold">
-                A score doesn&apos;t tell you which phoneme to fix. Cadence does.
+                A score doesn&apos;t tell you which sound to fix. Cadence does.
               </p>
               <p className="mt-3 text-sm leading-7 text-white/78">
                 Voice apps transcribe what you said. Duolingo logs your streak.
-                Neither tells you which specific sound is pulling your accent
-                off. That gap is exactly what Cadence fills.
+                Neither tells you which specific sound is pulling your
+                pronunciation off. That gap is exactly what Cadence fills.
               </p>
             </Card>
 
@@ -218,12 +218,12 @@ export default function Home() {
                 Who it&apos;s for
               </p>
               <p className="mt-4 text-2xl font-semibold text-hunter-green">
-                Non-native speakers who want precision, not just encouragement.
+                Non-native speakers who want to be understood, not just assessed.
               </p>
               <p className="mt-3 text-sm leading-7 text-iron-grey">
                 Solo learners building a daily habit. Professionals preparing
-                for clearer workplace communication. Tutors who want a
-                structured phoneme drill alongside their sessions.
+                for interviews and clearer workplace communication. Language
+                learners who&apos;ve studied for years but still feel misunderstood.
               </p>
             </Card>
           </div>
@@ -240,7 +240,7 @@ export default function Home() {
                 What&apos;s being built
               </p>
               <h2 className="max-w-2xl text-3xl font-semibold leading-tight">
-                Phoneme practice is the foundation. The platform goes further.
+                Pronunciation practice is the foundation. The platform goes further.
               </h2>
               <p className="max-w-2xl text-sm leading-8 text-white/78">
                 Cadence is growing into a full pronunciation curriculum: guided

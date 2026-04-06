@@ -1,6 +1,6 @@
 {
   "name": "cadence-desktop",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "description": "Cadence desktop application",
   "author": "Pavel Stepanov",
   "license": "MIT",
@@ -8,14 +8,15 @@
   "private": true,
   "scripts": {
     "prebuild": "node ./scripts/prepare-build.mjs",
+    "prepare:python-runtime": "node ./scripts/prepare-python-runtime.mjs",
     "dev": "node ./scripts/dev.mjs",
     "dev:watch": "concurrently \"tsc -p tsconfig.json -w\" \"electron .\"",
     "compile": "tsc -p tsconfig.json",
     "build:next": "pnpm --dir .. build && node ./scripts/fix-standalone.mjs",
-    "build:release": "node ./scripts/prepare-release.mjs && pnpm build:next && pnpm compile && electron-builder --mac",
-    "build": "pnpm build:next && pnpm compile && electron-builder",
-    "build:mac": "pnpm build:next && pnpm compile && electron-builder --mac",
-    "build:dir": "pnpm build:next && pnpm compile && electron-builder --dir",
+    "build:release": "node ./scripts/prepare-release.mjs && pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder --mac",
+    "build": "pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder",
+    "build:mac": "pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder --mac",
+    "build:dir": "pnpm prepare:python-runtime && pnpm build:next && pnpm compile && electron-builder --dir",
     "postinstall": "electron-builder install-app-deps"
   },
   "devDependencies": {

@@ -1,7 +1,6 @@
 import { app } from 'electron'
 import { EventEmitter } from 'events'
 import {
-  COMPOSE_PROJECT_NAME,
   INSTALL_STRATEGY,
   INSTALL_TIMEOUT_MS,
   POLL_INTERVAL_MS,
@@ -98,6 +97,18 @@ export class DesktopSetupManager {
       })
     }
 
+    if (manifest?.lastReadyAt && !this.installPromise) {
+      void this.install()
+      return this.setState({
+        ...health,
+        phase: 'checking',
+        currentStep: 'Reopening the local Cadence services on this Mac.',
+        percent: 10,
+        error: null,
+        runtimeDetails: runtime.details,
+      })
+    }
+
     return this.setState({
       ...health,
       phase: 'idle',
@@ -130,6 +141,10 @@ export class DesktopSetupManager {
 
   async openLocation(location: DesktopRuntimeLocation): Promise<void> {
     await this.runtime.openLocation(location)
+  }
+
+  dispose(): void {
+    this.runtime.dispose()
   }
 
   private async runInstall(): Promise<void> {
@@ -167,21 +182,6 @@ export class DesktopSetupManager {
       return
     }
 
-    const compose = await this.runtime.detectComposeCommand()
-    if (!compose) {
-      await this.runtime.writeLog('Docker Compose was not available on this machine.')
-      this.setState({
-        ...initialHealth,
-        phase: 'error',
-        currentStep: 'Cadence could not finish setup just yet.',
-        percent: 0,
-        error:
-          'Cadence could not start the background setup tools it needs. Please make sure they are installed and open on this Mac, then try again.',
-        runtimeDetails: initialRuntime.details,
-      })
-      return
-    }
-
     const sources = this.runtime.resolveServiceSources()
     if (!sources.aiEngineDir || !sources.coachEngineDir) {
       this.setState({
@@ -196,98 +196,76 @@ export class DesktopSetupManager {
       return
     }
 
-    await this.runtime.writeComposeFile(sources.aiEngineDir, sources.coachEngineDir)
-
     this.setState({
       ...initialHealth,
       phase: 'installing',
       currentStep: 'Preparing your speaking tools for the first launch.',
-      percent: 28,
+      percent: 20,
       error: null,
     })
 
-    await this.runtime.writeLog(`Using compose file ${this.runtime.composeFilePath}`)
-
-    let installPulse = 28
-    const installHeartbeat = setInterval(() => {
-      if (this.state.phase !== 'installing') {
-        return
-      }
-
-      installPulse = Math.min(52, installPulse + 1)
-      this.setState({
-        phase: 'installing',
-        percent: installPulse,
-        currentStep:
-          'Still getting Cadence ready. The first setup can take a few more minutes.',
+    let latestProgress = 20
+    try {
+      await this.runtime.prepareNativeRuntime({
+        ...sources,
+        onStatus: (step, percent) => {
+          latestProgress = Math.max(latestProgress, percent)
+          this.setState({
+            ...initialHealth,
+            phase: 'installing',
+            currentStep: step,
+            percent: latestProgress,
+            error: null,
+          })
+        },
+        onInstallChunk: (chunk) => {
+          this.handleInstallOutput(chunk)
+          void this.runtime.writeChunkToLog(chunk)
+        },
       })
-    }, 8000)
-
-    const composeResult = await this.runtime.runCommand(
-      compose.command,
-      [
-        ...compose.argsPrefix,
-        '-p',
-        COMPOSE_PROJECT_NAME,
-        '-f',
-        this.runtime.composeFilePath,
-        'up',
-        '--build',
-        '-d',
-      ],
-      {
-        allowFailure: true,
-        onStdoutChunk: (chunk) => {
-          this.handleInstallOutput(chunk)
-          void this.runtime.writeChunkToLog(chunk)
-        },
-        onStderrChunk: (chunk) => {
-          this.handleInstallOutput(chunk)
-          void this.runtime.writeChunkToLog(chunk)
-        },
-      },
-    )
-
-    clearInterval(installHeartbeat)
-
-    if (composeResult.exitCode !== 0) {
-      const composeFailureOutput = `${composeResult.stdout}\n${composeResult.stderr}`.trim()
-      const daemonUnavailable =
-        this.runtime.isDockerDaemonUnavailable(composeFailureOutput)
-
-      if (daemonUnavailable) {
-        const openedHelper = await this.runtime.openLocalRuntimeHelper()
-        this.setState({
-          ...initialHealth,
-          phase: 'error',
-          currentStep: 'Cadence is waiting for the local runtime helper to wake up.',
-          percent: 0,
-          error: openedHelper
-            ? 'Cadence opened the local runtime helper for you. Wait until it finishes starting, then click Retry setup.'
-            : 'Cadence could not reach the local runtime helper yet. Open Docker Desktop, wait for it to finish starting, then click Retry setup.',
-          runtimeDetails: initialRuntime.details,
-        })
-        return
-      }
-
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Cadence could not prepare its local speech tools on this Mac.'
+      await this.runtime.writeLog(message)
       this.setState({
         ...initialHealth,
         phase: 'error',
         currentStep: 'Cadence could not finish setup just yet.',
         percent: 0,
-        error:
-          'Cadence could not start its background setup steps. Please try again, or open the details view to see what happened.',
+        error: message,
         runtimeDetails: initialRuntime.details,
       })
       return
     }
 
     this.setState({
+      ...initialHealth,
       phase: 'starting-services',
       currentStep: 'Starting your speaking tools.',
       percent: 55,
       error: null,
     })
+
+    try {
+      await this.runtime.startNativeRuntime(sources)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Cadence could not start its local speech tools on this Mac.'
+      await this.runtime.writeLog(message)
+      this.setState({
+        ...initialHealth,
+        phase: 'error',
+        currentStep: 'Cadence could not finish setup just yet.',
+        percent: 0,
+        error: message,
+        runtimeDetails: initialRuntime.details,
+      })
+      return
+    }
 
     const started = await this.waitForHealthyRuntime()
     if (!started) {
@@ -393,7 +371,7 @@ export class DesktopSetupManager {
       return
     }
 
-    const nextPercent = Math.min(52, Math.max(this.state.percent, 28) + 1)
+    const nextPercent = Math.min(52, Math.max(this.state.percent, 20) + 1)
     this.setState({
       phase: 'installing',
       percent: nextPercent,

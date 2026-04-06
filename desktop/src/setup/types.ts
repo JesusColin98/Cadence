@@ -18,23 +18,25 @@ export interface DesktopSetupState {
   modelsReady: boolean
   error: string | null
   logsPath: string | null
-  installStrategy: 'docker-beta'
+  installStrategy: 'native-sidecar-beta'
   isPackaged: boolean
   runtimeDetails: DesktopRuntimeDetails | null
 }
 
 export interface DesktopRuntimeDetails {
   appVersion: string
-  installStrategy: 'docker-beta'
+  installStrategy: 'native-sidecar-beta'
   isPackaged: boolean
   lastReadyAt: string | null
   setupRoot: string
   runtimeDir: string
   modelsDir: string
   huggingFaceDir: string
-  composeFilePath: string
-  composeFilePresent: boolean
+  runtimeManifestPath: string
+  runtimeManifestPresent: boolean
   logsPath: string
+  aiEngineLogPath: string
+  coachEngineLogPath: string
   setupManifestPresent: boolean
   endpoints: {
     webApp: string
@@ -43,6 +45,7 @@ export interface DesktopRuntimeDetails {
   }
   availability: {
     huggingFaceTokenConfigured: boolean
+    pythonCommand: string | null
   }
   performance: {
     hostCpuCount: number
@@ -87,7 +90,9 @@ export type DesktopRuntimeLocation =
   | 'modelsDir'
   | 'huggingFaceDir'
   | 'logsPath'
-  | 'composeFilePath'
+  | 'runtimeManifestPath'
+  | 'aiEngineLogPath'
+  | 'coachEngineLogPath'
 
 export interface SetupManifest {
   version: 1
@@ -138,7 +143,7 @@ export interface HealthSnapshot {
 }
 
 export interface RuntimeFailureSnapshot {
-  type: 'coach-oom'
+  type: 'coach-oom' | 'service-exit'
   message: string
 }
 
@@ -150,13 +155,10 @@ export interface CommandResult {
 
 export interface RunCommandOptions {
   allowFailure?: boolean
+  cwd?: string
+  env?: NodeJS.ProcessEnv
   onStdoutChunk?: (chunk: string) => void
   onStderrChunk?: (chunk: string) => void
-}
-
-export interface ComposeCommand {
-  command: string
-  argsPrefix: string[]
 }
 
 export type StateListener = (state: DesktopSetupState) => void

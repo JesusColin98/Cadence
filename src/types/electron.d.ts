@@ -4,20 +4,24 @@ type DesktopRuntimeLocation =
   | 'modelsDir'
   | 'huggingFaceDir'
   | 'logsPath'
-  | 'composeFilePath'
+  | 'runtimeManifestPath'
+  | 'aiEngineLogPath'
+  | 'coachEngineLogPath'
 
 interface DesktopRuntimeDetails {
   appVersion: string
-  installStrategy: 'docker-beta'
+  installStrategy: 'native-sidecar-beta'
   isPackaged: boolean
   lastReadyAt: string | null
   setupRoot: string
   runtimeDir: string
   modelsDir: string
   huggingFaceDir: string
-  composeFilePath: string
-  composeFilePresent: boolean
+  runtimeManifestPath: string
+  runtimeManifestPresent: boolean
   logsPath: string
+  aiEngineLogPath: string
+  coachEngineLogPath: string
   setupManifestPresent: boolean
   endpoints: {
     webApp: string
@@ -26,6 +30,7 @@ interface DesktopRuntimeDetails {
   }
   availability: {
     huggingFaceTokenConfigured: boolean
+    pythonCommand: string | null
   }
   performance: {
     hostCpuCount: number
@@ -82,7 +87,7 @@ interface DesktopSetupState {
   modelsReady: boolean
   error: string | null
   logsPath: string | null
-  installStrategy: 'docker-beta'
+  installStrategy: 'native-sidecar-beta'
   isPackaged: boolean
   runtimeDetails: DesktopRuntimeDetails | null
 }

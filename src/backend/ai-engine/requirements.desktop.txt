@@ -1,0 +1,10 @@
+# FILE: src/ai-engine/requirements.desktop.txt
+fastapi
+uvicorn[standard]
+transformers==5.3.0
+torch==2.2.2
+accelerate==1.12.0
+librosa
+python-multipart
+numpy<2.0
+soundfile

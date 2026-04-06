@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Reference pronunciation is unavailable. Start src/backend/ai-engine/main.py in your gesture-music environment with OmniVoice installed.",
+          "Reference pronunciation is unavailable. Make sure the local ai-engine service is healthy, then try again.",
       },
       { status: 503 },
     );

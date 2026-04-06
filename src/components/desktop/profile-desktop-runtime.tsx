@@ -25,7 +25,7 @@ const INITIAL_STATE: DesktopSetupState = {
   modelsReady: false,
   error: null,
   logsPath: null,
-  installStrategy: "docker-beta",
+  installStrategy: "native-sidecar-beta",
   isPackaged: false,
   runtimeDetails: null,
 };
@@ -321,8 +321,8 @@ export function ProfileDesktopRuntime() {
               />
               <InfoCard
                 label="Install style"
-                value="Automatic local setup"
-                detail="Cadence prepares and starts its background speech and coaching tools for you."
+                value="Native local services"
+                detail="Cadence includes its own local runtime and starts the speech and coaching services directly on this Mac."
               />
               <InfoCard
                 label="Last ready"
@@ -368,9 +368,21 @@ export function ProfileDesktopRuntime() {
                   isFile
                 />
                 <RuntimeLocationRow
-                  label="Background runtime file"
-                  value={runtime.composeFilePath}
-                  kind="composeFilePath"
+                  label="Runtime manifest"
+                  value={runtime.runtimeManifestPath}
+                  kind="runtimeManifestPath"
+                  isFile
+                />
+                <RuntimeLocationRow
+                  label="Speech service log"
+                  value={runtime.aiEngineLogPath}
+                  kind="aiEngineLogPath"
+                  isFile
+                />
+                <RuntimeLocationRow
+                  label="Coach service log"
+                  value={runtime.coachEngineLogPath}
+                  kind="coachEngineLogPath"
                   isFile
                 />
               </PathPane>

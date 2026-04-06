@@ -5,11 +5,12 @@ export const COACH_ENGINE_URL = 'http://127.0.0.1:8001/coach-status'
 export const DESKTOP_WEB_APP_URL = app.isPackaged
   ? `http://127.0.0.1:${process.env.CADENCE_DESKTOP_PORT ?? '3130'}`
   : `http://localhost:${process.env.CADENCE_DEV_SERVER_PORT ?? '3000'}`
-export const COMPOSE_PROJECT_NAME = 'cadence-desktop-beta'
 export const INSTALL_TIMEOUT_MS = 20 * 60 * 1000
 export const POLL_INTERVAL_MS = 5000
 export const HEALTH_CHECK_TIMEOUT_MS = 1500
-export const INSTALL_STRATEGY = 'docker-beta' as const
+export const INSTALL_STRATEGY = 'native-sidecar-beta' as const
+export const MIN_DESKTOP_PYTHON_MAJOR = 3
+export const MIN_DESKTOP_PYTHON_MINOR = 10
 
 export const DEFAULT_DESKTOP_SPEECH_MODEL_ID =
   'facebook/wav2vec2-xlsr-53-espeak-cv-ft'
@@ -32,7 +33,6 @@ export const COMMAND_ENV = {
     '/usr/local/bin',
     '/usr/bin',
     '/bin',
-    '/Applications/Docker.app/Contents/Resources/bin',
   ]
     .filter(Boolean)
     .join(':'),
