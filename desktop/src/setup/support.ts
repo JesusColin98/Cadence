@@ -266,6 +266,48 @@ export class DesktopSetupSupport {
     return null
   }
 
+  isDockerDaemonUnavailable(output: string | null | undefined): boolean {
+    const normalized = (output ?? '').toLowerCase()
+    return (
+      normalized.includes('cannot connect to the docker daemon') ||
+      normalized.includes('is the docker daemon running') ||
+      normalized.includes('error during connect') ||
+      normalized.includes('docker.sock')
+    )
+  }
+
+  async openLocalRuntimeHelper(): Promise<boolean> {
+    const candidates =
+      process.platform === 'darwin'
+        ? ['/Applications/Docker.app', `${process.env.HOME ?? ''}/Applications/Docker.app`]
+        : []
+
+    for (const candidate of candidates.filter(Boolean)) {
+      if (!existsSync(candidate)) {
+        continue
+      }
+
+      const result = await shell.openPath(candidate)
+      if (!result) {
+        await this.writeLog(`Opened local runtime helper at ${candidate}`)
+        return true
+      }
+    }
+
+    const fallback = await this.runCommand('open', ['-a', 'Docker'], {
+      allowFailure: true,
+    })
+    if (fallback.exitCode === 0) {
+      await this.writeLog('Opened local runtime helper with open -a Docker')
+      return true
+    }
+
+    if (fallback.stderr.trim()) {
+      await this.writeLog(fallback.stderr.trim())
+    }
+    return false
+  }
+
   async runCommand(
     command: string,
     args: string[],

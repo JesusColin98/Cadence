@@ -251,6 +251,25 @@ export class DesktopSetupManager {
     clearInterval(installHeartbeat)
 
     if (composeResult.exitCode !== 0) {
+      const composeFailureOutput = `${composeResult.stdout}\n${composeResult.stderr}`.trim()
+      const daemonUnavailable =
+        this.runtime.isDockerDaemonUnavailable(composeFailureOutput)
+
+      if (daemonUnavailable) {
+        const openedHelper = await this.runtime.openLocalRuntimeHelper()
+        this.setState({
+          ...initialHealth,
+          phase: 'error',
+          currentStep: 'Cadence is waiting for the local runtime helper to wake up.',
+          percent: 0,
+          error: openedHelper
+            ? 'Cadence opened the local runtime helper for you. Wait until it finishes starting, then click Retry setup.'
+            : 'Cadence could not reach the local runtime helper yet. Open Docker Desktop, wait for it to finish starting, then click Retry setup.',
+          runtimeDetails: initialRuntime.details,
+        })
+        return
+      }
+
       this.setState({
         ...initialHealth,
         phase: 'error',
