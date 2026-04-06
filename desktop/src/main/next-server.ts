@@ -21,7 +21,11 @@ export function waitForServer(
 
     const retry = (remaining: number) => {
       if (remaining <= 0) {
-        reject(new Error('Next.js server failed to start within the timeout.'))
+        reject(
+          new Error(
+            'Cadence Desktop runtime failed to start within the expected time.',
+          ),
+        )
         return
       }
       setTimeout(() => attempt(remaining - 1), 500)
@@ -42,16 +46,17 @@ export async function startNextServer({
 }): Promise<UtilityProcess> {
   return new Promise((resolve, reject) => {
     const serverScript = join(resourcesPath, 'next-server', 'server.js')
-    const nextServer = utilityProcess.fork(serverScript, [], {
+    const desktopRuntime = utilityProcess.fork(serverScript, [], {
       cwd: join(resourcesPath, 'next-server'),
       env: {
         ...process.env,
         PORT: String(port),
+        HOSTNAME: '127.0.0.1',
         NODE_ENV: 'production',
         NEXT_SHARP_PATH: join(resourcesPath, 'next-server', 'node_modules', 'sharp'),
       },
       stdio: 'pipe',
-      serviceName: 'Cadence Web Runtime',
+      serviceName: 'Cadence Desktop Runtime',
     })
 
     let settled = false
@@ -60,7 +65,7 @@ export async function startNextServer({
         return
       }
       settled = true
-      resolve(nextServer)
+      resolve(desktopRuntime)
     }
 
     const finishError = (error: Error) => {
@@ -71,24 +76,30 @@ export async function startNextServer({
       reject(error)
     }
 
-    nextServer.stdout?.on('data', (chunk) => {
+    desktopRuntime.stdout?.on('data', (chunk) => {
       const message = chunk.toString()
-      console.log('[next]', message)
+      console.log('[cadence-runtime]', message)
       if (message.includes('Ready') || message.includes('started server')) {
         finishSuccess()
       }
     })
 
-    nextServer.stderr?.on('data', (chunk) => {
-      console.error('[next:err]', chunk.toString())
+    desktopRuntime.stderr?.on('data', (chunk) => {
+      console.error('[cadence-runtime:err]', chunk.toString())
     })
 
-    nextServer.on('error', (error) => {
-      finishError(new Error(`Next.js utility process failed: ${JSON.stringify(error)}`))
+    desktopRuntime.on('error', (error) => {
+      finishError(
+        new Error(
+          `Cadence desktop runtime failed: ${JSON.stringify(error)}`,
+        ),
+      )
     })
-    nextServer.on('exit', (code) => {
+    desktopRuntime.on('exit', (code) => {
       if (code !== 0 && code !== null) {
-        finishError(new Error(`Next.js process exited with code ${code}`))
+        finishError(
+          new Error(`Cadence desktop runtime exited with code ${code}`),
+        )
       }
     })
 

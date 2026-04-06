@@ -12,6 +12,7 @@
     "dev:watch": "concurrently \"tsc -p tsconfig.json -w\" \"electron .\"",
     "compile": "tsc -p tsconfig.json",
     "build:next": "pnpm --dir .. build && node ./scripts/fix-standalone.mjs",
+    "build:release": "node ./scripts/prepare-release.mjs && pnpm build:next && pnpm compile && electron-builder --mac",
     "build": "pnpm build:next && pnpm compile && electron-builder",
     "build:mac": "pnpm build:next && pnpm compile && electron-builder --mac",
     "build:dir": "pnpm build:next && pnpm compile && electron-builder --dir",

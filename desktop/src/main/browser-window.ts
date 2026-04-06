@@ -124,9 +124,24 @@ export async function createCadenceWindow({
     }
   }
 
-  const showStartupError = async (error: unknown) => {
-    const detail =
-      error instanceof Error ? error.message : 'Unknown startup error'
+  const showStartupScreen = async ({
+    title,
+    description,
+    detail,
+  }: {
+    title: string
+    description: string
+    detail?: string | null
+  }) => {
+    const detailMarkup = detail
+      ? `<pre>${detail}</pre>`
+      : `<div class="health">
+          <div class="pulse"></div>
+          <div>
+            <strong>Local startup check</strong>
+            <p>Cadence is opening its private desktop interface on this Mac.</p>
+          </div>
+        </div>`
 
     const html = `<!doctype html>
 <html lang="en">
@@ -164,6 +179,35 @@ export async function createCadenceWindow({
         line-height: 1.65;
         color: #51645a;
       }
+      .health {
+        margin: 18px 0 0;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border-radius: 18px;
+        background: #f5ebd2;
+        color: #23402c;
+      }
+      .health strong {
+        display: block;
+        font-size: 13px;
+      }
+      .health p {
+        margin: 4px 0 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #51645a;
+      }
+      .pulse {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: #a7c957;
+        box-shadow: 0 0 0 rgba(167, 201, 87, 0.45);
+        animation: pulse 1.8s infinite;
+        flex: 0 0 auto;
+      }
       pre {
         margin: 18px 0 0;
         padding: 14px 16px;
@@ -175,13 +219,18 @@ export async function createCadenceWindow({
         font-size: 13px;
         line-height: 1.5;
       }
+      @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(167, 201, 87, 0.45); }
+        70% { box-shadow: 0 0 0 12px rgba(167, 201, 87, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(167, 201, 87, 0); }
+      }
     </style>
   </head>
   <body>
     <main>
-      <h1>${appName} could not start its desktop interface.</h1>
-      <p>The packaged app was opened, but the bundled web server did not finish starting. Please rebuild the desktop app and try again.</p>
-      <pre>${detail}</pre>
+      <h1>${title}</h1>
+      <p>${description}</p>
+      ${detailMarkup}
     </main>
   </body>
 </html>`
@@ -190,11 +239,24 @@ export async function createCadenceWindow({
   }
 
   if (!isDev) {
+    await showStartupScreen({
+      title: `Opening ${appName}`,
+      description:
+        'Cadence is running a quick health check and opening its local desktop interface.',
+    })
+
     try {
       await onStartBundledServer()
     } catch (error) {
       console.error('[desktop] failed to start bundled server', error)
-      await showStartupError(error)
+      const detail =
+        error instanceof Error ? error.message : 'Unknown startup error'
+      await showStartupScreen({
+        title: `${appName} could not start its desktop interface.`,
+        description:
+          'The packaged app opened, but its local desktop interface did not finish starting.',
+        detail,
+      })
       return mainWindow
     }
   }
