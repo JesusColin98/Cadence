@@ -60,13 +60,200 @@ function formatReplySentence(assessment: PronunciationAssessment) {
   return assessment.highlights.map((highlight) => highlight.text).join(" ");
 }
 
+function FreedomAssessmentPanel({
+  transcript,
+  assessment,
+}: {
+  transcript: string;
+  assessment: PronunciationAssessment | null;
+}) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  if (!assessment) {
+    return (
+      <Card className="bg-white">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="eyebrow text-sm text-sage-green">Freedom transcript</p>
+            <h3 className="text-2xl font-semibold text-hunter-green">
+              Cadence captured what you said and is ready to compare the next take.
+            </h3>
+          </div>
+
+          <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+            <p className="eyebrow text-xs text-sage-green">Whisper transcript</p>
+            <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
+              {transcript}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-iron-grey">
+              This transcript becomes the target reply once the phoneme check finishes.
+            </p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  const correctHighlights = assessment.highlights.filter(
+    (highlight) => highlight.status === "correct",
+  ).length;
+  const mixedHighlights = assessment.highlights.filter(
+    (highlight) => highlight.status === "mixed",
+  ).length;
+
+  return (
+    <Card className="bg-white">
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <p className="eyebrow text-sm text-sage-green">Freedom transcript</p>
+          <h3 className="text-2xl font-semibold text-hunter-green">
+            Whisper builds the reply text, then Cadence checks the live phonemes against it.
+          </h3>
+        </div>
+
+        <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+          <p className="eyebrow text-xs text-sage-green">Whisper transcript</p>
+          <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
+            {transcript}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-iron-grey">
+            This is the word-level transcript from the freedom take.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
+          <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+            <p className="eyebrow text-xs text-sage-green">Transcript-based pronunciation</p>
+            <div className="mt-3 flex justify-center">
+              <ProgressRing
+                score={assessment.overallScore}
+                size={88}
+                strokeWidth={7}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+            <p className="eyebrow text-xs text-sage-green">Pronunciation check</p>
+            <p className="mt-2 text-sm leading-6 text-iron-grey">
+              {assessment.summary}
+            </p>
+            <p className="mt-3 text-sm font-semibold leading-6 text-hunter-green">
+              {assessment.nextStep}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+            <p className="eyebrow text-xs text-sage-green">Target reply</p>
+            <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
+              {assessment.targetText}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-iron-grey break-words">
+              {assessment.ipaTarget}
+            </p>
+          </div>
+
+          <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+            <p className="eyebrow text-xs text-sage-green">Decoded phonemes</p>
+            <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green break-words">
+              {assessment.transcript}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-iron-grey">
+              The live model decode for this take is shown here directly.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="eyebrow text-xs text-sage-green">Word feedback</p>
+              <p className="text-sm leading-6 text-iron-grey">
+                Compare the transcript-driven target with what the audio model heard.
+              </p>
+            </div>
+
+            <div className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-hunter-green">
+              {correctHighlights}/{assessment.highlights.length} strong words
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {assessment.highlights.map((highlight, index) => (
+              <span
+                key={`${highlight.text}-${highlight.status}-${index}`}
+                title={highlight.feedback}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-sm font-semibold",
+                  getFreedomHighlightStyles(highlight.status),
+                )}
+              >
+                {highlight.text}
+              </span>
+            ))}
+          </div>
+
+          <p className="mt-3 text-sm leading-6 text-iron-grey">
+            {correctHighlights} words were clean, {mixedHighlights} were close, and the rest need another pass.
+          </p>
+        </div>
+
+        <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="eyebrow text-xs text-sage-green">Advanced breakdown</p>
+              <p className="text-sm leading-6 text-iron-grey">
+                Open the phoneme grid to compare expected sounds with the live decode.
+              </p>
+            </div>
+
+            <Button
+              variant="ghost"
+              onClick={() => setShowAdvanced((value) => !value)}
+            >
+              {showAdvanced ? "Hide breakdown" : "Show breakdown"}
+            </Button>
+          </div>
+
+          {showAdvanced ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+              {assessment.phonemes.map((phoneme, index) => (
+                <div
+                  key={`${phoneme.symbol}-${phoneme.expected}-${phoneme.heard}-${index}`}
+                  className={cn(
+                    "rounded-3xl px-4 py-4",
+                    phoneme.status === "correct"
+                      ? "bg-yellow-green/25 text-hunter-green"
+                      : "bg-blushed-brick text-bright-snow",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="eyebrow text-xs">Sound</p>
+                    <p className="text-sm font-semibold">{phoneme.accuracy}%</p>
+                  </div>
+                  <p className="mt-3 text-2xl font-semibold">{phoneme.symbol}</p>
+                  <p className="mt-3 text-sm leading-6">
+                    Expected {phoneme.expected}, heard {phoneme.heard}.
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function buildHistory(turns: AiCoachTurn[]): AiCoachHistoryEntry[] {
   return turns.flatMap((turn) => {
     const entries: AiCoachHistoryEntry[] = [
       {
         role: "coach",
         content: turn.coachMessage,
-        cue: turn.checkpoint,
+        checkpoint: turn.checkpoint,
       },
     ];
 
@@ -162,6 +349,7 @@ export function AiCoachPlayground({
   }, [completedTurns]);
 
   const isCoachBusy = phase === "starting" || phase === "continuing";
+  const hasStartedSession = turns.length > 0;
   const startDisabled =
     !trimmedTopicDraft || !coachStatus?.ready || isCoachBusy;
   const startHelperMessage = !trimmedTopicDraft
@@ -965,6 +1153,34 @@ export function AiCoachPlayground({
               ))}
             </div>
 
+            <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="eyebrow text-xs text-sage-green">Reply mode</p>
+                  <p className="text-sm leading-6 text-iron-grey">
+                    Choose whether the next reply should follow an exact target or stay fully open.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={replyMode === "target" ? "primary" : "ghost"}
+                    className={cn(replyMode === "target" && "text-white")}
+                    onClick={() => setReplyMode("target")}
+                  >
+                    Targeted
+                  </Button>
+                  <Button
+                    variant={replyMode === "freedom" ? "primary" : "ghost"}
+                    className={cn(replyMode === "freedom" && "text-white")}
+                    onClick={() => setReplyMode("freedom")}
+                  >
+                    Freedom
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             {error && turns.length === 0 ? (
               <div className="rounded-3xl bg-blushed-brick px-4 py-3 text-sm text-bright-snow">
                 {error}
@@ -1009,23 +1225,18 @@ export function AiCoachPlayground({
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.06fr_0.94fr]">
-        <div className="space-y-4">
-          <Card className="bg-white">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <p className="eyebrow text-sm text-sage-green">Coach thread</p>
-                <h2 className="text-2xl font-semibold text-hunter-green">
-                  Keep the conversation visible while you answer.
-                </h2>
-              </div>
-
-              {turns.length === 0 ? (
-                <div className="rounded-3xl bg-vanilla-cream px-5 py-5 text-sm leading-7 text-iron-grey">
-                  Start a topic above and the coach will open the conversation,
-                  speak first, and hand you the next reply to practice aloud.
+      {hasStartedSession ? (
+        <section className="grid gap-4 xl:grid-cols-[1.06fr_0.94fr]">
+          <div className="space-y-4">
+            <Card className="bg-white">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="eyebrow text-sm text-sage-green">Coach thread</p>
+                  <h2 className="text-2xl font-semibold text-hunter-green">
+                    Keep the conversation visible while you answer.
+                  </h2>
                 </div>
-              ) : (
+
                 <div className="space-y-4 rounded-[2rem] bg-[#f6f0e0] px-4 py-4 sm:px-5">
                   {turns.map((turn, index) => {
                     const isCurrent = index === turns.length - 1;
@@ -1107,249 +1318,156 @@ export function AiCoachPlayground({
                     );
                   })}
                 </div>
-              )}
-              <div className="border-t border-hunter-green/10 pt-5">
-                <div className="space-y-4 rounded-[1.9rem] bg-vanilla-cream px-4 py-4 sm:px-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="eyebrow text-sm text-sage-green">Recorder</p>
-                      <h2 className="text-xl font-semibold text-hunter-green">
-                        Next reply
-                      </h2>
-                    </div>
-                    <div className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-hunter-green">
-                      {replyMode === "target" ? "Targeted" : "Freedom"}
-                    </div>
-                  </div>
 
-                  <AudioRecorder
-                    embedded
-                    showIntro={false}
-                    showStatus={false}
-                    captureMode={replyMode}
-                    key={currentTurn ? `${currentTurn.id}-${recorderVersion}-${replyMode}` : `idle-${recorderVersion}-${replyMode}`}
-                    targetWord={replyMode === "target" ? currentTurn?.learnerReply : undefined}
-                    instruct={instruct}
-                    disabled={recorderDisabled}
-                    onRecordingComplete={(blob) => void handleRecordingComplete(blob)}
-                    onClear={handleClearReply}
-                  />
-
-                  <div className="flex flex-wrap justify-center gap-3 border-t border-hunter-green/10 pt-4">
-                    <Button
-                      variant="ghost"
-                      onClick={handleRetry}
-                      disabled={
-                        !currentTurn ||
-                        phase === "assessing" ||
-                        (!latestAssessment && !latestFreeTranscript)
-                      }
-                    >
-                      Try again
-                    </Button>
-                    <Button
-                      onClick={() => void requestCoachTurn("continue")}
-                      disabled={!canContinue}
-                    >
-                      <ArrowRight size={16} color="currentColor" />
-                      {phase === "continuing" ? "Loading next reply..." : "Next coach reply"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <div className="self-start space-y-4 xl:sticky xl:top-6">
-          <Card className="bg-white">
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <p className="eyebrow text-sm text-sage-green">Reply flow</p>
-                <h2 className="text-2xl font-semibold text-hunter-green">
-                  Keep the next turn, cue, and outcome in view.
-                </h2>
-              </div>
-
-              {currentTurn ? (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant={replyMode === "target" ? "primary" : "ghost"}
-                      className={cn(replyMode === "target" && "text-white")}
-                      onClick={() => setReplyMode("target")}
-                    >
-                      Targeted
-                    </Button>
-                    <Button
-                      variant={replyMode === "freedom" ? "primary" : "ghost"}
-                      className={cn(replyMode === "freedom" && "text-white")}
-                      onClick={() => setReplyMode("freedom")}
-                    >
-                      Freedom
-                    </Button>
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
-                      <p className="eyebrow text-xs text-sage-green">Checkpoint</p>
-                      <p className="mt-2 text-sm font-semibold uppercase tracking-[0.05em] text-hunter-green">
-                        {currentTurn.checkpoint}
-                      </p>
-                    </div>
-
-                    <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
-                      <p className="eyebrow text-xs text-sage-green">Pronunciation cue</p>
-                      <p className="mt-2 text-sm leading-6 text-iron-grey">
-                        {currentTurn.cue}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
-                    {replyMode === "target" ? (
-                      <>
-                        <p className="eyebrow text-xs text-sage-green">Target reply</p>
-                        <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
-                          {currentTurn.learnerReply}
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-iron-grey">
-                          Repeat this exact line to get strict pronunciation scoring against the target.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="eyebrow text-xs text-sage-green">Freedom mode</p>
-                        <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
-                          Answer the coach naturally in your own words.
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-iron-grey">
-                          No suggested sentence is shown here. Cadence will transcribe what you actually say and feed that back into the next coach turn.
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-3xl bg-vanilla-cream px-4 py-4 text-sm leading-6 text-iron-grey">
-                  The coach will place the next reply here as soon as you start a topic.
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {latestFreeTranscript ? (
-            <div ref={resultPanelRef}>
-            <Card className="bg-white">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <p className="eyebrow text-sm text-sage-green">Freedom transcript</p>
-                  <h3 className="text-2xl font-semibold text-hunter-green">
-                    Cadence captured what you said and checked the take against that transcript.
-                  </h3>
-                </div>
-
-                <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
-                  <p className="eyebrow text-xs text-sage-green">Transcribed reply</p>
-                  <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
-                    {latestFreeTranscript}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-iron-grey">
-                    Freedom mode follows your real answer and keeps the coach moving naturally.
-                  </p>
-                </div>
-
-                {latestAssessment ? (
-                  <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
-                    <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
-                      <p className="eyebrow text-xs text-sage-green">Transcript-based pronunciation</p>
-                      <div className="mt-3 flex justify-center">
-                        <ProgressRing
-                          score={latestAssessment.overallScore}
-                          size={88}
-                          strokeWidth={7}
-                        />
+                <div className="border-t border-hunter-green/10 pt-5">
+                  <div className="space-y-4 rounded-[1.9rem] bg-vanilla-cream px-4 py-4 sm:px-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="eyebrow text-sm text-sage-green">Recorder</p>
+                        <h2 className="text-xl font-semibold text-hunter-green">
+                          Next reply
+                        </h2>
+                      </div>
+                      <div className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-hunter-green">
+                        {replyMode === "target" ? "Targeted" : "Freedom"}
                       </div>
                     </div>
-                    <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
-                      <p className="eyebrow text-xs text-sage-green">Pronunciation check</p>
-                      <p className="mt-2 text-sm leading-6 text-iron-grey">
-                        {latestAssessment.summary}
-                      </p>
-                      <p className="mt-3 text-sm font-semibold leading-6 text-hunter-green">
-                        {latestAssessment.nextStep}
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
 
-                {latestAssessment ? (
-                  <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
-                    <p className="eyebrow text-xs text-sage-green">Word feedback</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {latestAssessment.highlights.map((highlight, index) => (
-                        <span
-                          key={`${highlight.text}-${highlight.status}-${index}`}
-                          title={highlight.feedback}
-                          className={cn(
-                            "rounded-full px-3 py-1.5 text-sm font-semibold",
-                            getFreedomHighlightStyles(highlight.status),
-                          )}
-                        >
-                          {highlight.text}
-                        </span>
-                      ))}
+                    <AudioRecorder
+                      embedded
+                      showIntro={false}
+                      showStatus={false}
+                      captureMode={replyMode}
+                      key={currentTurn ? `${currentTurn.id}-${recorderVersion}-${replyMode}` : `idle-${recorderVersion}-${replyMode}`}
+                      targetWord={replyMode === "target" ? currentTurn?.learnerReply : undefined}
+                      instruct={instruct}
+                      disabled={recorderDisabled}
+                      onRecordingComplete={(blob) => void handleRecordingComplete(blob)}
+                      onClear={handleClearReply}
+                    />
+
+                    <div className="flex flex-wrap justify-center gap-3 border-t border-hunter-green/10 pt-4">
+                      <Button
+                        variant="ghost"
+                        onClick={handleRetry}
+                        disabled={
+                          !currentTurn ||
+                          phase === "assessing" ||
+                          (!latestAssessment && !latestFreeTranscript)
+                        }
+                      >
+                        Try again
+                      </Button>
+                      <Button
+                        onClick={() => void requestCoachTurn("continue")}
+                        disabled={!canContinue}
+                      >
+                        <ArrowRight size={16} color="currentColor" />
+                        {phase === "continuing" ? "Loading next reply..." : "Next coach reply"}
+                      </Button>
                     </div>
                   </div>
-                ) : null}
+                </div>
               </div>
             </Card>
-            </div>
-          ) : latestAssessment ? (
-            <div ref={resultPanelRef}>
-            <AssessmentResult
-              assessment={latestAssessment}
-              onRetry={handleRetry}
-              onNext={() => void requestCoachTurn("continue")}
-              nextLabel="Next coach reply"
-              showActions={false}
-            />
-            </div>
-          ) : (
+          </div>
+
+          <div className="self-start space-y-4 xl:sticky xl:top-6">
             <Card className="bg-white">
-              <div className="space-y-2">
-                <p className="eyebrow text-sm text-sage-green">Assessment score</p>
-                <h3 className="text-2xl font-semibold text-hunter-green">
-                  Feedback lands here after each reply.
-                </h3>
-                <p className="text-sm leading-7 text-iron-grey">
-                  The side panel stays with you while the conversation grows, so
-                  you can record, listen, and adjust without hunting for the
-                  latest feedback card.
-                </p>
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <p className="eyebrow text-sm text-sage-green">Reply flow</p>
+                  <h2 className="text-2xl font-semibold text-hunter-green">
+                    Keep the next turn, cue, and outcome in view.
+                  </h2>
+                </div>
+
+                {currentTurn ? (
+                  <>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+                        <p className="eyebrow text-xs text-sage-green">Checkpoint</p>
+                        <p className="mt-2 text-sm font-semibold uppercase tracking-[0.05em] text-hunter-green">
+                          {currentTurn.checkpoint}
+                        </p>
+                      </div>
+
+                      <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+                        <p className="eyebrow text-xs text-sage-green">Pronunciation cue</p>
+                        <p className="mt-2 text-sm leading-6 text-iron-grey">
+                          {currentTurn.cue}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl bg-vanilla-cream px-4 py-4">
+                      {replyMode === "target" ? (
+                        <>
+                          <p className="eyebrow text-xs text-sage-green">Target reply</p>
+                          <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
+                            {currentTurn.learnerReply}
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-iron-grey">
+                            Repeat this exact line to get strict pronunciation scoring against the target.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="eyebrow text-xs text-sage-green">Freedom mode</p>
+                          <p className="mt-2 text-lg font-semibold leading-7 text-hunter-green">
+                            Answer the coach naturally in your own words.
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-iron-grey">
+                            No suggested sentence is shown here. Cadence will transcribe what you actually say and feed that back into the next coach turn.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </>
+                ) : null}
               </div>
             </Card>
-          )}
 
-          {coachAudioError ? (
-            <div className="rounded-3xl bg-blushed-brick px-4 py-3 text-sm text-bright-snow">
-              {coachAudioError}
-            </div>
-          ) : null}
+            {latestFreeTranscript ? (
+              <div ref={resultPanelRef}>
+              <FreedomAssessmentPanel
+                key={`${latestFreeTranscript}-${latestAssessment?.transcript ?? "no-phoneme-decode"}`}
+                transcript={latestFreeTranscript}
+                assessment={latestAssessment}
+              />
+              </div>
+            ) : latestAssessment ? (
+              <div ref={resultPanelRef}>
+              <AssessmentResult
+                assessment={latestAssessment}
+                onRetry={handleRetry}
+                onNext={() => void requestCoachTurn("continue")}
+                nextLabel="Next coach reply"
+                showActions={false}
+              />
+              </div>
+            ) : null}
 
-          {error ? (
-            <div className="rounded-3xl bg-blushed-brick px-4 py-3 text-sm text-bright-snow">
-              {error}
-            </div>
-          ) : null}
+            {coachAudioError ? (
+              <div className="rounded-3xl bg-blushed-brick px-4 py-3 text-sm text-bright-snow">
+                {coachAudioError}
+              </div>
+            ) : null}
 
-          {isLoadingCoachAudio ? (
-            <div className="rounded-3xl bg-white px-4 py-3 text-sm text-iron-grey">
-              Coach audio is loading for the current turn.
-            </div>
-          ) : null}
-        </div>
-      </section>
+            {error ? (
+              <div className="rounded-3xl bg-blushed-brick px-4 py-3 text-sm text-bright-snow">
+                {error}
+              </div>
+            ) : null}
+
+            {isLoadingCoachAudio ? (
+              <div className="rounded-3xl bg-white px-4 py-3 text-sm text-iron-grey">
+                Coach audio is loading for the current turn.
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

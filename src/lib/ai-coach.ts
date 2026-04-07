@@ -34,6 +34,7 @@ export interface AiCoachHistoryEntry {
   role: AiCoachRole;
   content: string;
   cue?: string | null;
+  checkpoint?: string | null;
   score?: number | null;
   transcript?: string | null;
 }

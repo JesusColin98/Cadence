@@ -46,17 +46,6 @@ def _extract_json_object(content: str) -> str:
     return trimmed
 
 
-def _repair_json_candidate(content: str) -> str:
-    repaired = content.strip()
-    repaired = re.sub(
-        r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)',
-        r'\1"\2"\3',
-        repaired,
-    )
-    repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
-    return repaired
-
-
 def _clean_model_output(content: str) -> str:
     cleaned = re.sub(r"<\|[^|]+?\|>", " ", str(content))
     cleaned = re.sub(r"</?think>", " ", cleaned, flags=re.IGNORECASE)
@@ -80,46 +69,145 @@ def _latest_history_content(
     return ""
 
 
-def _truncate_sentence(value: str, *, limit: int = 140) -> str:
-    normalized = re.sub(r"\s+", " ", value).strip()
-    if not normalized:
-        return normalized
-
-    if len(normalized) <= limit:
-        return normalized
-
-    shortened = normalized[:limit].rsplit(" ", 1)[0].strip()
-    return shortened or normalized[:limit].strip()
+def _normalize_for_match(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
 
 
-def _summarize_user_content(value: str) -> str:
-    normalized = re.sub(r"\s+", " ", value).strip()
-    if not normalized:
-        return normalized
+def _strip_inline_coach_annotations(value: str) -> str:
+    normalized = str(value or "")
+    normalized = re.sub(
+        r"\[\s*checkpoint\s*:\s*[^\]]+?\s*\]",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    normalized = re.sub(
+        r"\[\s*transcript\s*=\s*[^\]]+?\s*\]",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    normalized = re.sub(
+        r"\[\s*cue\s*=\s*[^\]]+?\s*\]",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    normalized = re.sub(
+        r"\bCue\s*:\s*.+?(?=\bCheckpoint\s*:|\Z)",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    normalized = re.sub(
+        r"\bCheckpoint\s*:\s*.+$",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    normalized = re.sub(
+        r"\bLearnerReply\s*:\s*$",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s+", " ", normalized).strip()
 
-    first_clause = re.split(r"[?.!]", normalized, maxsplit=1)[0].strip()
-    return _truncate_sentence(first_clause or normalized, limit=72)
 
-
-def _looks_like_plain_coach_message(content: str) -> bool:
-    candidate = content.strip()
-    if not candidate:
+def _looks_like_prompt_echo(content: str) -> bool:
+    lowered = str(content or "").strip().lower()
+    if not lowered:
         return False
 
-    lowered = candidate.lower()
-    if (
-        candidate.startswith("{")
-        or "coachmessage" in lowered
-        or "learnerreply" in lowered
-        or lowered.startswith("coach:")
-        or lowered.startswith("next step:")
-        or lowered.startswith("cue:")
-        or lowered.startswith("checkpoint:")
-        or "[transcript=" in lowered
-    ):
+    return any(
+        re.search(pattern, lowered)
+        for pattern in (
+            r"\btopic\s*:",
+            r"\baction\s*:",
+            r"\bturn type\s*:",
+            r"\blearner mode\s*:",
+            r"\breply mode\b",
+            r"\btarget mode\b",
+            r"\bfreedom mode\b",
+            r"\bcoachmessage\b",
+            r"\blearnerreply\b",
+            r"\bnextstep\s*=",
+            r"\bnext step\s*[:=]",
+            r"\btarget\s*=",
+            r"\btranscript\s*=",
+            r"\bscore\s*=",
+            r"\bsummary\s*=",
+            r"\bcue\s*[:=]",
+            r"\bcheckpoint\s*[:=]",
+            r"\blatest pronunciation assessment\b",
+        )
+    )
+
+
+def _is_repeated_coach_message(coach_message: str, history: list[dict[str, Any]]) -> bool:
+    latest_coach = _latest_history_content(history, "coach")
+    if not latest_coach:
         return False
 
-    return True
+    normalized_coach = _normalize_for_match(coach_message)
+    normalized_latest = _normalize_for_match(latest_coach)
+    if not normalized_coach or not normalized_latest:
+        return False
+
+    if normalized_coach == normalized_latest:
+        return True
+
+    if len(normalized_coach) < 36 or len(normalized_latest) < 36:
+        return False
+
+    return normalized_coach.startswith(normalized_latest) or normalized_latest.startswith(
+        normalized_coach
+    )
+
+
+def _should_reject_coach_message(coach_message: str, history: list[dict[str, Any]]) -> bool:
+    normalized = _sanitize_coach_message(coach_message, "")
+    if not normalized:
+        return True
+
+    return (
+        _looks_like_prompt_echo(coach_message)
+        or _is_echoed_user_message(normalized, history)
+        or _is_repeated_coach_message(normalized, history)
+        or _is_low_information_coach_message(normalized)
+    )
+
+
+def _is_low_information_coach_message(coach_message: str) -> bool:
+    normalized = re.sub(r"\s+", " ", coach_message).strip()
+    if not normalized:
+        return True
+
+    lowered = normalized.lower()
+    word_count = len(lowered.split())
+
+    generic_patterns = (
+        r"^continue (your|the) ",
+        r"^continue preparing",
+        r"^continue practicing",
+        r"^keep practicing",
+        r"^keep preparing",
+        r"^keep working on",
+        r"^let'?s continue",
+        r"^let'?s keep going",
+        r"^continue the conversation",
+        r"^continue your preparations",
+    )
+    if any(re.search(pattern, lowered) for pattern in generic_patterns):
+        return True
+
+    if "?" not in normalized and word_count <= 7:
+        return True
+
+    if "?" not in normalized and lowered.startswith("let's make sure"):
+        return True
+
+    return False
 
 
 def _parse_labeled_turn(content: str) -> dict[str, str] | None:
@@ -176,138 +264,15 @@ def _parse_labeled_turn(content: str) -> dict[str, str] | None:
         if inline_checkpoint and not parsed.get("checkpoint"):
             parsed["checkpoint"] = inline_checkpoint.group(1).strip()
 
-        cleaned_message = re.sub(
-            r"\[\s*checkpoint\s*:\s*[^\]]+?\s*\]",
-            "",
-            coach_message,
-            flags=re.IGNORECASE,
-        )
-        cleaned_message = re.sub(
-            r"\[\s*transcript\s*=\s*[^\]]+?\s*\]",
-            "",
-            cleaned_message,
-            flags=re.IGNORECASE,
-        )
-        cleaned_message = re.sub(
-            r"\[\s*cue\s*=\s*[^\]]+?\s*\]",
-            "",
-            cleaned_message,
-            flags=re.IGNORECASE,
-        )
-        cleaned_message = re.sub(
-            r"\bCue\s*:\s*.+?(?=\bCheckpoint\s*:|\Z)",
-            "",
-            cleaned_message,
-            flags=re.IGNORECASE,
-        )
-        cleaned_message = re.sub(
-            r"\bCheckpoint\s*:\s*.+$",
-            "",
-            cleaned_message,
-            flags=re.IGNORECASE,
-        )
-        cleaned_message = re.sub(
-            r"\bLearnerReply\s*:\s*$",
-            "",
-            cleaned_message,
-            flags=re.IGNORECASE,
-        )
-        parsed["coachMessage"] = cleaned_message.strip()
+        parsed["coachMessage"] = _strip_inline_coach_annotations(coach_message)
 
     return _coerce_turn(parsed)
 
 
-def _build_contextual_fallback_turn(
-    *,
-    topic: str,
-    action: str,
-    mode: str,
-    history: list[dict[str, Any]],
-    latest_assessment: dict[str, Any] | None = None,
-    draft_coach_message: str | None = None,
-) -> dict[str, str]:
-    latest_user = _latest_history_content(history, "user")
-    normalized_topic = _truncate_sentence(topic, limit=72)
-    normalized_user = _summarize_user_content(latest_user)
-
-    if draft_coach_message and _looks_like_plain_coach_message(draft_coach_message):
-        coach_message = _truncate_sentence(draft_coach_message)
-        if coach_message[-1:] not in ".!?":
-            coach_message = f"{coach_message}."
-    elif action == "start":
-        coach_message = (
-            f"Let's start with {normalized_topic}. What part of it matters most to you right now?"
-            if normalized_topic
-            else "What would you like to talk through first?"
-        )
-    elif normalized_user:
-        coach_message = (
-            f"That makes sense. In a real conversation, what do you want people to notice first when you say, \"{normalized_user}\"?"
-        )
-    else:
-        coach_message = (
-            f"Stay with {normalized_topic} for a moment. What's the main idea you want to get across?"
-            if normalized_topic
-            else "What do you want to explain more clearly next?"
-        )
-
-    next_step = ""
-    score = None
-    if isinstance(latest_assessment, dict):
-        next_step = re.sub(
-            r"\s+",
-            " ",
-            str(latest_assessment.get("nextStep") or ""),
-        ).strip()
-        try:
-            score = float(latest_assessment.get("overallScore"))
-        except (TypeError, ValueError):
-            score = None
-
-    if next_step:
-        cue = _truncate_sentence(next_step, limit=96)
-    elif isinstance(score, (int, float)) and score < 75:
-        cue = "Slow down a touch and finish the key sounds cleanly."
-    elif normalized_topic:
-        cue = f"Keep your phrasing steady while you explain {normalized_topic.lower()}."
-    else:
-        cue = "Keep your pacing steady and finish the thought clearly."
-
-    if mode == "freedom":
-        learner_reply = ""
-    elif normalized_user:
-        learner_reply = f"I want to explain it clearly and use confident body language."
-    elif normalized_topic:
-        learner_reply = f"I want to explain {normalized_topic.lower()} in a clear and confident way."
-    else:
-        learner_reply = "I want to explain this clearly and confidently."
-
-    checkpoint = "next reply" if action == "continue" else "opening turn"
-
-    return {
-        "coachMessage": coach_message,
-        "learnerReply": learner_reply,
-        "cue": cue,
-        "checkpoint": checkpoint,
-    }
-
-
-def _minimal_fallback_turn(mode: str) -> dict[str, str]:
-    return {
-        "coachMessage": "Tell me a little more about that.",
-        "learnerReply": "" if mode == "freedom" else "I can explain that in one clear sentence.",
-        "cue": "Keep the pacing steady and finish clearly.",
-        "checkpoint": "next turn",
-    }
-
-
 def _parse_turn_response(
     decoded: str,
-    topic: str,
-    action: str,
     mode: str,
     history: list[dict[str, Any]],
-    latest_assessment: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     cleaned = _clean_model_output(decoded)
     json_candidate = _extract_json_object(cleaned)
@@ -315,57 +280,25 @@ def _parse_turn_response(
     if json_candidate:
         try:
             parsed_turn = _normalize_turn(_coerce_turn(json.loads(json_candidate)), mode)
-            if not _is_echoed_user_message(parsed_turn["coachMessage"], history):
-                return parsed_turn
+            if _should_reject_coach_message(parsed_turn["coachMessage"], history):
+                raise RuntimeError(
+                    "Coach model output was rejected because it echoed prompt metadata or repeated the previous coach turn."
+                )
+            return parsed_turn
         except json.JSONDecodeError:
-            repaired_json = _repair_json_candidate(json_candidate)
-            if repaired_json != json_candidate:
-                try:
-                    parsed_turn = _normalize_turn(
-                        _coerce_turn(json.loads(repaired_json)),
-                        mode,
-                    )
-                    if not _is_echoed_user_message(parsed_turn["coachMessage"], history):
-                        return parsed_turn
-                except json.JSONDecodeError:
-                    pass
+            pass
 
     labeled = _parse_labeled_turn(cleaned)
     if labeled:
         parsed_turn = _normalize_turn(labeled, mode)
-        if not _is_echoed_user_message(parsed_turn["coachMessage"], history):
-            return parsed_turn
+        if _should_reject_coach_message(parsed_turn["coachMessage"], history):
+            raise RuntimeError(
+                "Coach model output was rejected because it echoed prompt metadata or repeated the previous coach turn."
+            )
+        return parsed_turn
 
-    if _looks_like_plain_coach_message(cleaned):
-        logger.warning(
-            "Coach model returned plain text instead of structured output. Recovering a contextual turn. preview=%s",
-            cleaned[:240],
-        )
-        return _normalize_turn(
-            _build_contextual_fallback_turn(
-                topic=topic,
-                action=action,
-                mode=mode,
-                history=history,
-                latest_assessment=latest_assessment,
-                draft_coach_message=cleaned,
-            ),
-            mode,
-        )
-
-    logger.warning(
-        "Coach model returned non-JSON output. Falling back to a synthetic turn. preview=%s",
-        cleaned[:240],
-    )
-    return _normalize_turn(
-        _build_contextual_fallback_turn(
-            topic=topic,
-            action=action,
-            mode=mode,
-            history=history,
-            latest_assessment=latest_assessment,
-        ),
-        mode,
+    raise RuntimeError(
+        f"Coach model returned an invalid turn format. Expected JSON with coachMessage, learnerReply, cue, and checkpoint. Output preview: {cleaned[:240]}"
     )
 
 
@@ -376,18 +309,7 @@ def _sanitize_sentence(value: Any, fallback: str) -> str:
 
 def _sanitize_coach_message(value: Any, fallback: str) -> str:
     normalized = _sanitize_sentence(value, fallback)
-    normalized = re.sub(
-        r"\[\s*checkpoint\s*:\s*[^\]]+?\s*\]",
-        "",
-        normalized,
-        flags=re.IGNORECASE,
-    ).strip()
-    normalized = re.sub(
-        r"\[\s*transcript\s*=\s*[^\]]+?\s*\]",
-        "",
-        normalized,
-        flags=re.IGNORECASE,
-    ).strip()
+    normalized = _strip_inline_coach_annotations(normalized)
     return normalized or fallback
 
 
@@ -396,11 +318,8 @@ def _is_echoed_user_message(coach_message: str, history: list[dict[str, Any]]) -
     if not latest_user:
         return False
 
-    def normalize(value: str) -> str:
-        return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
-
-    normalized_coach = normalize(coach_message)
-    normalized_user = normalize(latest_user)
+    normalized_coach = _normalize_for_match(coach_message)
+    normalized_user = _normalize_for_match(latest_user)
     if not normalized_coach or not normalized_user:
         return False
 
@@ -408,26 +327,27 @@ def _is_echoed_user_message(coach_message: str, history: list[dict[str, Any]]) -
 
 
 def _normalize_turn(turn: dict[str, str], mode: str) -> dict[str, str]:
-    coach_message = _sanitize_coach_message(
-        turn.get("coachMessage"),
-        "Tell me a little more about that.",
-    )
-    learner_reply = _sanitize_sentence(
+    coach_message = _sanitize_coach_message(turn.get("coachMessage"), "")
+    if not coach_message:
+        raise RuntimeError("Coach response is missing coachMessage.")
+
+    learner_reply = "" if mode == "freedom" else _sanitize_sentence(
         turn.get("learnerReply"),
-        "" if mode == "freedom" else "I can explain that in one clear sentence.",
+        "",
     )
+    if mode != "freedom" and not learner_reply:
+        raise RuntimeError("Coach response is missing learnerReply in target mode.")
 
     if learner_reply and learner_reply[-1:] not in ".!?":
         learner_reply = f"{learner_reply}."
 
-    cue = _sanitize_sentence(
-        turn.get("cue"),
-        "Keep the rhythm steady and finish the last consonant clearly.",
-    )
-    checkpoint = _sanitize_sentence(
-        turn.get("checkpoint"),
-        "next reply",
-    ).lower()
+    cue = _sanitize_sentence(turn.get("cue"), "")
+    if not cue:
+        raise RuntimeError("Coach response is missing cue.")
+
+    checkpoint = _sanitize_sentence(turn.get("checkpoint"), "").lower()
+    if not checkpoint:
+        raise RuntimeError("Coach response is missing checkpoint.")
 
     return {
         "coachMessage": coach_message,
@@ -467,37 +387,30 @@ def _serialize_history(history: list[dict[str, Any]]) -> str:
 
     lines: list[str] = []
     for index, entry in enumerate(history[-10:], start=1):
-        details = [
-            f"cue={entry['cue']}" if entry.get("cue") else None,
-            f"score={entry['score']}" if isinstance(entry.get("score"), (int, float)) else None,
-            f"transcript={entry['transcript']}" if entry.get("transcript") else None,
-        ]
-        detail_text = " | ".join(item for item in details if item)
         content = str(entry.get("content") or "").strip()
         role = str(entry.get("role") or "user").upper()
-        lines.append(
-            f"{index}. {role}: {content}{f' [{detail_text}]' if detail_text else ''}"
-        )
+        lines.append(f"{index}. {role}: {content}")
     return "\n".join(lines)
 
 
 def _system_prompt() -> str:
     return " ".join(
         [
-            "You are Cadence Coach, a natural English speaking partner for pronunciation practice.",
-            "Generate one conversation turn at a time for open-topic speaking.",
-            "Return exactly four lines with these labels: CoachMessage, LearnerReply, Cue, Checkpoint.",
-            "coachMessage should sound like a real follow-up in an ongoing conversation.",
-            "In target mode, learnerReply should be one natural sentence the learner can repeat next.",
-            "In freedom mode, learnerReply can be an empty string.",
-            "cue should be one short pronunciation note.",
-            "checkpoint should be a short lowercase label.",
-            "Do not explain the format and do not add markdown or code fences.",
-            "Example:",
-            "CoachMessage: What part of that feels most important to you?",
-            "LearnerReply: I want to explain the main idea clearly.",
-            "Cue: Keep the key words steady and clear.",
-            "Checkpoint: next reply",
+            "You are Cadence Coach.",
+            "You are an English speaking partner for short conversational practice.",
+            "Speak like a natural conversation partner, not like a lecturer or technical instructor.",
+            "Return exactly one JSON object with these keys: coachMessage, learnerReply, cue, checkpoint.",
+            "coachMessage is the next thing the coach says.",
+            "It should usually be one short question, or two short sentences when you need to answer the learner briefly first.",
+            "Do not dodge or replace a specific learner question with a vague encouragement.",
+            "Do not give step-by-step lessons, long explanations, safety guidance, or multi-part instructions.",
+            "Keep coachMessage under 20 words when possible.",
+            "In target mode, learnerReply is the exact sentence the learner should say next and it must be a short natural first-person answer to coachMessage.",
+            "In freedom mode, learnerReply must be an empty string.",
+            "Keep learnerReply under 16 words when possible.",
+            "cue is a short pronunciation note.",
+            "checkpoint is a short lowercase label.",
+            "Return JSON only.",
         ]
     )
 
@@ -507,38 +420,76 @@ def _user_prompt(payload: dict[str, Any]) -> str:
     action = str(payload.get("action") or "continue")
     mode = str(payload.get("mode") or "target").strip().lower()
     history = payload.get("history") if isinstance(payload.get("history"), list) else []
-
+    latest_coach = _latest_history_content(history, "coach")
+    latest_user = _latest_history_content(history, "user")
     lines = [
-        f"Topic: {topic}",
+        f"Topic: {topic or 'open speaking practice'}",
         f"Action: {action}",
-        f"Reply mode: {mode}",
-        "Conversation history:",
+        f"Mode: {mode}",
+        "History:",
         _serialize_history(history),
     ]
+
+    if latest_coach:
+        lines.append(f"Latest coach line: {latest_coach}")
+    if latest_user:
+        lines.append(f"Latest learner line: {latest_user}")
 
     latest_assessment = payload.get("latestAssessment")
     if isinstance(latest_assessment, dict):
         lines.extend(
             [
-                "Latest pronunciation assessment:",
-                f"target={latest_assessment.get('targetText', '')}",
-                f"transcript={latest_assessment.get('transcript', '')}",
-                f"score={latest_assessment.get('overallScore', '')}",
-                f"summary={latest_assessment.get('summary', '')}",
-                f"nextStep={latest_assessment.get('nextStep', '')}",
+                "Latest pronunciation note:",
+                str(latest_assessment.get("nextStep") or "").strip(),
             ]
         )
 
     lines.extend(
         [
-            "Goal:",
-            "Open the conversation naturally."
+            "Instruction:",
+            "Start the conversation on the topic."
             if action == "start"
-            else "Continue the conversation naturally from the latest exchange.",
-            "Follow the user's direction if the topic shifts.",
-            "Keep the exchange useful for spoken practice.",
+            else "Continue the conversation from the latest exchange.",
+            "Keep it conversational and concise.",
+            "Your next coachMessage must respond directly to the latest learner line.",
+            "If the learner asks a question, answer it briefly and then ask one short follow-up question.",
+            "If the learner changes the angle of the conversation, follow that change.",
+            "Do not ignore specific details like dates, worries, plans, or side ideas if the learner brings them up.",
+            "Ask one simple follow-up instead of teaching the topic.",
+            "If mode is target, generate one short answer sentence the learner can repeat aloud easily.",
+            "If mode is freedom, leave learnerReply empty.",
         ]
     )
+
+    return "\n".join(lines)
+
+
+def _revision_prompt(
+    payload: dict[str, Any],
+    *,
+    previous_output: str,
+    error_message: str,
+) -> str:
+    mode = str(payload.get("mode") or "target").strip().lower()
+    latest_user = _latest_history_content(
+        payload.get("history") if isinstance(payload.get("history"), list) else [],
+        "user",
+    )
+
+    lines = [
+        "Revise your previous turn.",
+        f"Problem: {error_message}",
+        f"Mode: {mode}",
+        f"Latest learner line: {latest_user or 'none'}",
+        f"Previous output: {_clean_model_output(previous_output)[:240]}",
+        "Return exactly one JSON object with coachMessage, learnerReply, cue, checkpoint.",
+        "coachMessage must clearly respond to the latest learner line.",
+        "If the learner asked a direct question, answer it briefly and ask one short follow-up question.",
+        "Do not give a generic line like 'continue your preparations'.",
+        "Do not ignore specific details from the learner line.",
+        "Keep the turn conversational and concise.",
+        "If mode is freedom, learnerReply must be an empty string.",
+    ]
 
     return "\n".join(lines)
 
@@ -553,9 +504,9 @@ class GemmaCoachEngine:
         self.device_label = self._detect_device()
         self.last_warmup_seconds: float | None = None
         self.last_generation_seconds: float | None = None
-        self.max_new_tokens = int(os.getenv("COACH_LLM_MAX_NEW_TOKENS", "220"))
-        self.temperature = float(os.getenv("COACH_LLM_TEMPERATURE", "0.72"))
-        self.top_p = float(os.getenv("COACH_LLM_TOP_P", "0.92"))
+        self.max_new_tokens = int(os.getenv("COACH_LLM_MAX_NEW_TOKENS", "160"))
+        self.temperature = float(os.getenv("COACH_LLM_TEMPERATURE", "0.78"))
+        self.top_p = float(os.getenv("COACH_LLM_TOP_P", "0.9"))
 
     def _detect_device(self) -> str:
         forced = os.getenv("COACH_LLM_DEVICE", "").strip().lower()
@@ -700,18 +651,46 @@ class GemmaCoachEngine:
             {"role": "user", "content": _user_prompt(payload)},
         ]
         generation_start = time.perf_counter()
-        decoded = self._generate_decoded(messages)
-        logger.info("Coach raw model output preview=%s", _clean_model_output(decoded)[:240])
-        turn = _parse_turn_response(
-            decoded,
-            topic=topic,
-            action=str(payload.get("action") or "continue"),
-            mode=str(payload.get("mode") or "target"),
-            history=history,
-            latest_assessment=payload.get("latestAssessment")
-            if isinstance(payload.get("latestAssessment"), dict)
-            else None,
-        )
+        last_error: str | None = None
+        decoded = ""
+        turn: dict[str, str] | None = None
+
+        for attempt in range(2):
+            decoded = self._generate_decoded(messages)
+            logger.info(
+                "Coach raw model output attempt=%s preview=%s",
+                attempt + 1,
+                _clean_model_output(decoded)[:240],
+            )
+
+            try:
+                turn = _parse_turn_response(
+                    decoded,
+                    mode=str(payload.get("mode") or "target"),
+                    history=history,
+                )
+                break
+            except RuntimeError as exc:
+                last_error = str(exc)
+                if attempt == 1:
+                    raise
+
+                messages = [
+                    {"role": "system", "content": _system_prompt()},
+                    {"role": "user", "content": _user_prompt(payload)},
+                    {"role": "assistant", "content": decoded},
+                    {
+                        "role": "user",
+                        "content": _revision_prompt(
+                            payload,
+                            previous_output=decoded,
+                            error_message=last_error,
+                        ),
+                    },
+                ]
+
+        if turn is None:
+            raise RuntimeError(last_error or "Coach model did not return a valid turn.")
 
         self.last_generation_seconds = time.perf_counter() - generation_start
 

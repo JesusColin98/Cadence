@@ -97,5 +97,9 @@
   "collect":{ "ipa": "k ə l ɛ k t", "segments": [{"text":"co","start":0,"end":2},{"text":"ll","start":2,"end":3},{"text":"ect","start":3,"end":6}] },
   "correct":{ "ipa": "k ə ɹ ɛ k t", "segments": [{"text":"co","start":0,"end":2},{"text":"rr","start":2,"end":3},{"text":"ect","start":3,"end":6}] },
   "connect":{ "ipa": "k ə n ɛ k t", "segments": [{"text":"co","start":0,"end":2},{"text":"nn","start":2,"end":3},{"text":"ect","start":3,"end":6}] },
-  "support":{ "ipa": "s ə p ɔː t",  "segments": [{"text":"su","start":0,"end":2},{"text":"pp","start":2,"end":3},{"text":"ort","start":3,"end":5}] }
+  "support":{ "ipa": "s ə p ɔː t",  "segments": [{"text":"su","start":0,"end":2},{"text":"pp","start":2,"end":3},{"text":"ort","start":3,"end":5}] },
+  "succeed":{ "ipa": "s ə k s iː d", "segments": [{"text":"su","start":0,"end":2},{"text":"cc","start":2,"end":3},{"text":"eed","start":3,"end":6}] },
+  "suffer": { "ipa": "s ə f ə",      "segments": [{"text":"su","start":0,"end":2},{"text":"ff","start":2,"end":3},{"text":"er","start":3,"end":5}] },
+  "supper": { "ipa": "s ə p ə",      "segments": [{"text":"su","start":0,"end":2},{"text":"pp","start":2,"end":3},{"text":"er","start":3,"end":5}] },
+  "supply": { "ipa": "s ə p l aɪ",    "segments": [{"text":"su","start":0,"end":2},{"text":"pp","start":2,"end":  3},{"text":"ly","start":3,"end":5}] }
 }
