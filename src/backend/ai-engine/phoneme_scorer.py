@@ -26,9 +26,9 @@ MODEL_REVISION = "3e836924cfd3b858a0bbdbc1f7ef412105d00446"
 MODEL_WEIGHTS_FILENAME = "model.safetensors"
 logger = logging.getLogger("cadence.ai_engine.scorer")
 
-_TARGETS_PATH = pathlib.Path(__file__).parent / "practice_targets.json"
+_TARGETS_PATH = pathlib.Path(__file__).parent.parent / "data" / "practice_targets.json"
 with _TARGETS_PATH.open(encoding="utf-8") as _f:
-    PRACTICE_TARGETS: dict[str, dict[str, Any]] = json.load(_f)
+    PRACTICE_TARGETS: dict[str, dict[str, Any]] = json.load(_f)["words"]
 
 logger.info("Loaded %d practice targets from %s", len(PRACTICE_TARGETS), _TARGETS_PATH)
 

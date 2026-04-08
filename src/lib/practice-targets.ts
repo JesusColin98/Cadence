@@ -1,5 +1,5 @@
 // FILE: src/lib/practice-targets.ts
-import practiceTargetsData from "@/backend/ai-engine/practice_targets.json";
+import practiceTargetsData from "@/backend/data/practice_targets.json";
 
 interface PracticeTargetSegment {
   text: string;
@@ -9,6 +9,9 @@ interface PracticeTargetSegment {
 
 interface PracticeTargetRecord {
   ipa: string;
+  category: string;
+  focus_phoneme: string;
+  cue: string | null;
   segments: PracticeTargetSegment[];
 }
 
@@ -16,29 +19,19 @@ export interface PracticeTargetOption {
   word: string;
   label: string;
   ipa: string;
+  category: string;
   cue: string;
 }
 
-const cueOverrides: Record<string, string> = {
-  think:
-    "Stretch the air through the th, then keep the vowel short and relaxed.",
-  three:
-    "Start with a soft th, then keep the r light before opening into the long ee.",
-  very:
-    "Let the lower lip touch lightly for the v, then keep the ending clear and forward.",
-};
-
-const practiceTargets = practiceTargetsData as Record<string, PracticeTargetRecord>;
+const practiceTargets = practiceTargetsData.words as Record<string, PracticeTargetRecord>;
 
 function toLabel(word: string) {
   return word.slice(0, 1).toUpperCase() + word.slice(1);
 }
 
 function buildCue(word: string, target: PracticeTargetRecord) {
-  const override = cueOverrides[word];
-
-  if (override) {
-    return override;
+  if (target.cue) {
+    return target.cue;
   }
 
   const focus = target.segments
@@ -56,6 +49,7 @@ export const PRACTICE_TARGET_OPTIONS: PracticeTargetOption[] = Object.entries(
     word,
     label: toLabel(word),
     ipa: `/${target.ipa}/`,
+    category: target.category,
     cue: buildCue(word, target),
   }))
   .sort((left, right) => left.label.localeCompare(right.label));

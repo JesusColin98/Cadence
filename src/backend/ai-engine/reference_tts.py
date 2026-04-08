@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -36,144 +38,28 @@ TTS_REQUIRE_MODEL = (
 
 logger = logging.getLogger("cadence.ai_engine.reference_tts")
 
-IPA_NARRATION_MAP = {
-    "æ": "short a sound",
-    "ɛ": "short e sound",
-    "ɪ": "short i sound",
-    "ɒ": "short o sound",
-    "ʌ": "short u sound",
-    "ə": "schwa sound",
-    "iː": "long e sound",
-    "uː": "long u sound",
-    "ɑː": "long ah sound",
-    "ɔː": "aw sound",
-    "ɜː": "er sound",
-    "θ": "th sound",
-    "ð": "soft th sound",
-    "ʃ": "sh sound",
-    "ʒ": "zh sound",
-    "tʃ": "ch sound",
-    "dʒ": "j sound",
-    "ŋ": "ng sound",
-}
+_DATA_DIR = pathlib.Path(__file__).parent.parent / "data"
 
-VALID_ENGLISH_INSTRUCTS = {
-    "american accent",
-    "australian accent",
-    "british accent",
-    "canadian accent",
-    "child",
-    "chinese accent",
-    "elderly",
-    "female",
-    "high pitch",
-    "indian accent",
-    "japanese accent",
-    "korean accent",
-    "low pitch",
-    "male",
-    "middle-aged",
-    "moderate pitch",
-    "portuguese accent",
-    "russian accent",
-    "teenager",
-    "very high pitch",
-    "very low pitch",
-    "whisper",
-    "young adult",
-}
+def _load_json(filename: str) -> Any:
+    path = _DATA_DIR / filename
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
 
-VOICE_IDENTITY_TOKENS = {
-    "child",
-    "teenager",
-    "young adult",
-    "middle-aged",
-    "elderly",
-    "female",
-    "male",
-}
+_ipa_data = _load_json("ipa_narration.json")
+IPA_NARRATION_MAP: dict[str, str] = _ipa_data["map"]
 
-VOICE_PITCH_TOKENS = {
-    "very low pitch",
-    "low pitch",
-    "moderate pitch",
-    "high pitch",
-    "very high pitch",
-}
+_voice_data = _load_json("voice_config.json")
+VALID_ENGLISH_INSTRUCTS: set[str] = set(_voice_data["valid_instructs"])
+VOICE_IDENTITY_TOKENS: set[str] = set(_voice_data["identity_tokens"])
+VOICE_PITCH_TOKENS: set[str] = set(_voice_data["pitch_tokens"])
+VOICE_ACCENT_TOKENS: set[str] = set(_voice_data["accent_tokens"])
+INSTRUCT_NORMALIZATION_MAP: dict[str, str | None] = _voice_data["normalization_map"]
 
-VOICE_ACCENT_TOKENS = {
-    "american accent",
-    "australian accent",
-    "british accent",
-    "canadian accent",
-    "chinese accent",
-    "indian accent",
-    "japanese accent",
-    "korean accent",
-    "portuguese accent",
-    "russian accent",
-}
-
-INSTRUCT_NORMALIZATION_MAP = {
-    "american": "american accent",
-    "american english": "american accent",
-    "us accent": "american accent",
-    "british": "british accent",
-    "medium pitch": "moderate pitch",
-    "mid pitch": "moderate pitch",
-    "neutral": None,
-    "clear": None,
-    "professional": None,
-}
-
-MACOS_DEFAULT_TTS_MODEL_NAME = "macOS Speech"
-MACOS_SAY_RATE_WORD = 155
-MACOS_SAY_RATE_NARRATION = 175
-
-MACOS_VOICE_PROFILES = {
-    "american-default": [
-        "Eddy (English (US))",
-        "Flo (English (US))",
-        "Samantha",
-        "Alex",
-    ],
-    "american-male": [
-        "Eddy (English (US))",
-        "Alex",
-        "Albert",
-    ],
-    "american-female": [
-        "Flo (English (US))",
-        "Samantha",
-    ],
-    "british-default": [
-        "Daniel",
-        "Serena",
-        "Eddy (English (UK))",
-        "Flo (English (UK))",
-    ],
-    "british-male": [
-        "Daniel",
-        "Eddy (English (UK))",
-    ],
-    "british-female": [
-        "Serena",
-        "Flo (English (UK))",
-    ],
-    "australian-default": [
-        "Karen",
-    ],
-    "indian-default": [
-        "Veena",
-    ],
-    "fallback": [
-        "Eddy (English (US))",
-        "Flo (English (US))",
-        "Samantha",
-        "Alex",
-        "Daniel",
-    ],
-}
+_macos_cfg = _voice_data["macos"]
+MACOS_DEFAULT_TTS_MODEL_NAME: str = _macos_cfg["model_name"]
+MACOS_SAY_RATE_WORD: int = _macos_cfg["say_rate_word"]
+MACOS_SAY_RATE_NARRATION: int = _macos_cfg["say_rate_narration"]
+MACOS_VOICE_PROFILES: dict[str, list[str]] = _macos_cfg["voice_profiles"]
 
 
 def _preview_text(text: str, limit: int = 120) -> str:

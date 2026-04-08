@@ -1,0 +1,123 @@
+{
+  "version": "1.0",
+  "description": "TTS voice configuration: valid instruct tokens, category groupings, normalization aliases, and platform-specific voice profiles.",
+
+  "valid_instructs": [
+    "american accent",
+    "australian accent",
+    "british accent",
+    "canadian accent",
+    "child",
+    "chinese accent",
+    "elderly",
+    "female",
+    "high pitch",
+    "indian accent",
+    "japanese accent",
+    "korean accent",
+    "low pitch",
+    "male",
+    "middle-aged",
+    "moderate pitch",
+    "portuguese accent",
+    "russian accent",
+    "teenager",
+    "very high pitch",
+    "very low pitch",
+    "whisper",
+    "young adult"
+  ],
+
+  "identity_tokens": [
+    "child",
+    "teenager",
+    "young adult",
+    "middle-aged",
+    "elderly",
+    "female",
+    "male"
+  ],
+
+  "pitch_tokens": [
+    "very low pitch",
+    "low pitch",
+    "moderate pitch",
+    "high pitch",
+    "very high pitch"
+  ],
+
+  "accent_tokens": [
+    "american accent",
+    "australian accent",
+    "british accent",
+    "canadian accent",
+    "chinese accent",
+    "indian accent",
+    "japanese accent",
+    "korean accent",
+    "portuguese accent",
+    "russian accent"
+  ],
+
+  "normalization_map": {
+    "american":         "american accent",
+    "american english": "american accent",
+    "us accent":        "american accent",
+    "british":          "british accent",
+    "medium pitch":     "moderate pitch",
+    "mid pitch":        "moderate pitch",
+    "neutral":          null,
+    "clear":            null,
+    "professional":     null
+  },
+
+  "macos": {
+    "model_name": "macOS Speech",
+    "say_rate_word": 155,
+    "say_rate_narration": 175,
+    "voice_profiles": {
+      "american-default": [
+        "Eddy (English (US))",
+        "Flo (English (US))",
+        "Samantha",
+        "Alex"
+      ],
+      "american-male": [
+        "Eddy (English (US))",
+        "Alex",
+        "Albert"
+      ],
+      "american-female": [
+        "Flo (English (US))",
+        "Samantha"
+      ],
+      "british-default": [
+        "Daniel",
+        "Serena",
+        "Eddy (English (UK))",
+        "Flo (English (UK))"
+      ],
+      "british-male": [
+        "Daniel",
+        "Eddy (English (UK))"
+      ],
+      "british-female": [
+        "Serena",
+        "Flo (English (UK))"
+      ],
+      "australian-default": [
+        "Karen"
+      ],
+      "indian-default": [
+        "Veena"
+      ],
+      "fallback": [
+        "Eddy (English (US))",
+        "Flo (English (US))",
+        "Samantha",
+        "Alex",
+        "Daniel"
+      ]
+    }
+  }
+}
