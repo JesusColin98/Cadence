@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from phoneme_scorer import MODEL_NAME, PhonemeScorer
+from phoneme_scorer import PhonemeScorer
 from reference_tts import ReferenceSpeechSynthesizer
 from speech_transcriber import SpeechTranscriber
 
@@ -24,60 +24,17 @@ logging.basicConfig(
 
 logger = logging.getLogger("cadence.ai_engine.main")
 
-
-def configure_torch_cpu_threads() -> None:
-    requested = os.getenv("CADENCE_CPU_THREADS", "").strip()
-    if not requested:
-        return
-
-    try:
-        thread_count = max(1, int(requested))
-    except ValueError:
-        logger.warning("Ignoring invalid CADENCE_CPU_THREADS=%s", requested)
-        return
-
-    try:
-        import torch
-
-        torch.set_num_threads(thread_count)
-        if hasattr(torch, "set_num_interop_threads"):
-            try:
-                torch.set_num_interop_threads(max(1, min(4, thread_count)))
-            except RuntimeError:
-                pass
-        logger.info("Configured AI engine torch CPU threads=%s", thread_count)
-    except Exception:
-        logger.exception("Failed to configure AI engine torch CPU threads")
-
-
-configure_torch_cpu_threads()
 reference_tts = ReferenceSpeechSynthesizer()
 speech_transcriber = SpeechTranscriber()
 scorer = PhonemeScorer(
-    model_name=MODEL_NAME,
     reference_synthesizer=reference_tts,
 )
 runtime_warmup_lock = Lock()
 
 
 def prime_audio_runtime_imports() -> None:
-    try:
-        from transformers import (
-            AutoFeatureExtractor,
-            WhisperForConditionalGeneration,
-            WhisperProcessor,
-            Wav2Vec2FeatureExtractor,
-            Wav2Vec2ForCTC,
-        )
-
-        logger.info(
-            "Primed transformer audio imports auto=%s whisper=%s wav2vec=%s",
-            AutoFeatureExtractor.__name__,
-            WhisperProcessor.__name__,
-            Wav2Vec2FeatureExtractor.__name__,
-        )
-    except Exception:
-        logger.exception("Failed to prime transformer audio imports")
+    # No local transformer imports needed for Gemini cloud engine
+    logger.info("Skipping local transformer imports for Gemini cloud engine")
 
 
 def ensure_runtime_warmup_started(force: bool = False) -> None:
