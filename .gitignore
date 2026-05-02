@@ -54,3 +54,13 @@ __pycache__/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+#local deployment
+cloudbuild.yaml
+deploy_gcp.ps1
+deploy.ps1
+docker-compose.yml
+tsconfig.json
+src\backend\ai-engine\download_models.py
+src\backend\coach-engine\download_models.py
