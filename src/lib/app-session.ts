@@ -29,6 +29,7 @@ export interface AppSession {
 export async function getAppSession(): Promise<AppSession> {
   const mode = await getAppMode();
 
+  /* TEMPORARILY DISABLED AUTHENTICATION
   if (mode === "local") {
     const profile = await getLocalProfile();
     return {
@@ -48,16 +49,32 @@ export async function getAppSession(): Promise<AppSession> {
       user: user ? mapSupabaseUserToAppUser(user) : null,
     };
   }
+  */
 
+  // TEMPORARY: Return a mock user immediately to skip authentication everywhere
   return {
-    mode,
-    user: null,
+    mode: mode ?? "local",
+    user: {
+      id: "mock-user-id",
+      email: "guest@example.com",
+      createdAt: new Date().toISOString(),
+      displayName: "Guest User",
+      practiceFocus: "General",
+      practiceCadence: "Daily",
+      onboardingCompleted: true,
+      isLocal: true,
+      meta: {},
+    },
   };
 }
 
 export async function requireAppUser(pathname: string) {
   const session = await getAppSession();
 
+  // TEMPORARY: Return the session immediately, assuming it's valid
+  return session as AppSession & { user: AppUser; mode: "local" | "cloud" };
+
+  /* TEMPORARILY DISABLED AUTHENTICATION
   if (session.mode === "local" && session.user) {
     return session as AppSession & { user: AppUser; mode: "local" };
   }
@@ -71,6 +88,7 @@ export async function requireAppUser(pathname: string) {
   }
 
   redirect(`/setup?next=${encodeURIComponent(pathname)}`);
+  */
 }
 
 function mapLocalProfileToAppUser(profile: LocalProfile): AppUser {
