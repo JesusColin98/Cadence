@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getRequestRuntimeFromRequest } from "@/lib/runtime/request-runtime";
 import {
   APP_MODE_COOKIE,
   getAppModeCookieOptions,
@@ -38,7 +37,6 @@ export async function POST(request: Request) {
     redirectTo: getRedirectTarget({
       mode,
       next: body?.next,
-      runtime: getRequestRuntimeFromRequest(request),
     }),
   });
 
@@ -64,20 +62,14 @@ export async function DELETE() {
 function getRedirectTarget({
   mode,
   next,
-  runtime,
 }: {
   mode: "local" | "cloud";
   next?: string;
-  runtime: "desktop" | "web";
 }) {
   const safeNext = typeof next === "string" && next.startsWith("/") ? next : null;
 
   if (mode === "cloud") {
     return "/signup";
-  }
-
-  if (runtime === "desktop") {
-    return "/desktop/setup";
   }
 
   if (safeNext) {

@@ -6,10 +6,8 @@ import { Navbar } from "@/components/ui/navbar";
 import { Card } from "@/components/ui/card";
 import { SignOutButton } from "@/components/ui/sign-out-button";
 import { ProfileCoachVoice } from "@/components/audio/ProfileCoachVoice";
-import { ProfileDesktopRuntime } from "@/components/desktop/profile-desktop-runtime";
 import { CancelSubscriptionButton } from "@/components/auth/CancelSubscriptionButton";
 import { requireAppUser } from "@/lib/app-session";
-import { getRequestRuntime } from "@/lib/runtime/request-runtime";
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -38,8 +36,6 @@ function trialDaysLeft(trialEnd: string | undefined): number | null {
 
 export default async function ProfilePage() {
   const session = await requireAppUser("/profile");
-  const runtime = await getRequestRuntime();
-  const isDesktop = runtime === "desktop";
   const meta = session.user.meta;
   const isLocal = session.mode === "local";
   const displayName = session.user.displayName;
@@ -207,8 +203,6 @@ export default async function ProfilePage() {
         </section>
 
         <ProfileCoachVoice />
-        {isDesktop ? <ProfileDesktopRuntime /> : null}
-
       </div>
     </main>
   );

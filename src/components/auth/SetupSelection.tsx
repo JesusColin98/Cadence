@@ -1,14 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { startTransition, useMemo, useState } from "react";
+import { startTransition, useState } from "react";
 import { ArrowRight, Cloud, Database } from "griddy-icons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface SetupSelectionProps {
-  runtime: "desktop" | "web";
   nextPath: string | null;
   currentMode: "local" | "cloud" | null;
   cloudAvailable: boolean;
@@ -16,7 +15,6 @@ interface SetupSelectionProps {
 }
 
 export function SetupSelection({
-  runtime,
   nextPath,
   currentMode,
   cloudAvailable,
@@ -26,11 +24,7 @@ export function SetupSelection({
   const [pendingMode, setPendingMode] = useState<"local" | "cloud" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const localTitle = useMemo(() => {
-    return runtime === "desktop"
-      ? "Use Cadence locally on this Mac"
-      : "Use Cadence locally in this browser";
-  }, [runtime]);
+  const localTitle = "Use Cadence locally in this browser";
 
   async function handleModeSelection(mode: "local" | "cloud") {
     setPendingMode(mode);

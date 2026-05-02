@@ -2,7 +2,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-import { getRequestRuntimeFromRequest } from "@/lib/runtime/request-runtime";
 import { isStripeConfigured, stripe } from "@/lib/stripe";
 import { assertSupabaseConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -20,10 +19,6 @@ export async function POST(request: Request) {
         { error: "Invalid subscription action." },
         { status: 400 },
       );
-    }
-
-    if (shouldProxyDesktopBillingRequest(request)) {
-      return proxyDesktopBillingRequest(request, { action });
     }
 
     if (!isStripeConfigured()) {
@@ -149,68 +144,6 @@ async function getAuthenticatedUser(request: Request) {
   return { user, error };
 }
 
-function shouldProxyDesktopBillingRequest(request: Request) {
-  if (getRequestRuntimeFromRequest(request) !== "desktop") {
-    return false;
-  }
-
-  return new URL(request.url).origin !== getHostedBillingOrigin();
-}
-
-async function proxyDesktopBillingRequest(
-  request: Request,
-  payload: { action: "cancel" | "resume" },
-) {
-  const accessToken = getBearerToken(request);
-
-  if (!accessToken) {
-    return NextResponse.json(
-      {
-        error:
-          "Your desktop session needs to be refreshed before billing can update. Please sign in again and retry.",
-      },
-      { status: 401 },
-    );
-  }
-
-  try {
-    const response = await fetch(`${getHostedBillingOrigin()}/api/stripe/cancel`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    });
-
-    const contentType = response.headers.get("content-type") ?? "";
-
-    if (contentType.includes("application/json")) {
-      const responseBody = (await response.json().catch(() => null)) as
-        | Record<string, unknown>
-        | null;
-
-      return NextResponse.json(responseBody ?? {}, { status: response.status });
-    }
-
-    const text = await response.text();
-    return NextResponse.json(
-      {
-        error:
-          text.trim() ||
-          "The hosted billing service returned an unexpected response.",
-      },
-      { status: response.status },
-    );
-  } catch (error) {
-    return NextResponse.json(
-      { error: getSubscriptionUpdateErrorMessage(error) },
-      { status: 503 },
-    );
-  }
-}
-
 function getBearerToken(request: Request) {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) {
@@ -219,12 +152,4 @@ function getBearerToken(request: Request) {
 
   const token = header.slice("Bearer ".length).trim();
   return token || null;
-}
-
-function getHostedBillingOrigin() {
-  return (
-    process.env.CADENCE_HOSTED_APP_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "https://cadence.pstepanov.dev"
-  ).replace(/\/$/, "");
 }
