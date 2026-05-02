@@ -2,7 +2,6 @@
 import { cookies } from "next/headers";
 import { getAppSession } from "@/lib/app-session";
 import { getModuleProgressStatsForMode } from "@/lib/learn-data";
-import { getRequestRuntime } from "@/lib/runtime/request-runtime";
 import { ModuleProgressFrame } from "@/components/ui/module-progress-frame";
 import {
   CONVERSATION_MODULES,
@@ -53,7 +52,6 @@ export async function ModuleProgress({
   variant = "default",
 }: { variant?: "default" | "dark" } = {}) {
   const session = await getAppSession();
-  const runtime = await getRequestRuntime();
 
   if (!session.mode || !session.user) return null;
 
@@ -78,7 +76,7 @@ export async function ModuleProgress({
   if (overallTotal === 0) return null;
 
   return (
-    <ModuleProgressFrame runtime={runtime}>
+    <ModuleProgressFrame>
       <ProgressBar
         label="Module progress"
         countLabel={`${completedModules}/${Math.max(totalModules, 0)}`}

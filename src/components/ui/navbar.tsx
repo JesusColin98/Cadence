@@ -4,7 +4,6 @@ import { Download, Settings } from "griddy-icons";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { NavbarFrame } from "@/components/ui/navbar-frame";
 import { getAppSession } from "@/lib/app-session";
-import { getRequestRuntime } from "@/lib/runtime/request-runtime";
 import { cn } from "@/lib/utils";
 
 type NavKey =
@@ -28,7 +27,6 @@ const navBaseClass =
 
 export async function Navbar({ current, variant = "default" }: NavbarProps) {
   const session = await getAppSession();
-  const runtime = await getRequestRuntime();
   const isAuthenticated = Boolean(session.user);
   const logoHref = isAuthenticated ? "/dashboard" : "/";
 
@@ -88,7 +86,7 @@ export async function Navbar({ current, variant = "default" }: NavbarProps) {
     : "bg-yellow-green text-hunter-green hover:bg-[#b5d567]";
 
   return (
-    <NavbarFrame variant={variant} runtime={runtime}>
+    <NavbarFrame variant={variant}>
       <Link
         href={logoHref}
         className="flex h-11 items-center justify-center self-center"
