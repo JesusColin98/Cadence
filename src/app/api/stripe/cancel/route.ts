@@ -7,6 +7,8 @@ import { assertSupabaseConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json().catch(() => null)) as

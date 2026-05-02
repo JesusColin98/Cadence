@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { getAppSession } from "@/lib/app-session";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Starting your trial",
   robots: { index: false, follow: false },

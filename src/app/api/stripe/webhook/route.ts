@@ -4,6 +4,8 @@ import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+export const dynamic = "force-dynamic";
+
 // Helper: merge stripe fields into user_metadata without clobbering existing keys
 async function updateSubscriptionMeta(
   userId: string,
