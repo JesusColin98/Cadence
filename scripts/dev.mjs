@@ -52,7 +52,7 @@ if (shouldDryRun) {
 
 if (!hasExplicitPort && !(await isPortAvailable(targetPort))) {
   console.error(
-    `Port ${targetPort} is already in use. Stop the existing server or run "pnpm dev --port <port>". Cadence Desktop expects the web app on port ${targetPort}.`,
+    `Port ${targetPort} is already in use. Stop the existing server or run "pnpm dev --port <port>".`,
   )
   process.exit(1)
 }
